@@ -417,7 +417,7 @@ const BX0=24,PITCH=10,GAP=5,BAND_H=40,TOP=4;
 const holeX=c=>BX0+c*PITCH+Math.floor(c/5)*GAP;
 const LANE_Y={1:11,0:29};                 // offset inside a band: NPC lane, player lane
 const START_X=9,HOME_X=BX0+29*PITCH+5*GAP+16;
-const PCOL={0:'#4fc3f7',1:'#ff8a65'};
+const PCOL={0:'#4fc3f7',1:'#ff4d6d'};
 function pegPos(p,score){
   const c=pegCell(score);
   if(c.start)return{x:START_X,y:TOP+LANE_Y[p]};
@@ -452,8 +452,9 @@ function initBoard(){
     h+=`<circle cx="${HOME_X}" cy="${TOP+3*BAND_H+LANE_Y[p]}" r="4.4" fill="#2a1608" stroke="#e8c35a" stroke-width="1"/>`;
   }
   h+=`<text x="${HOME_X}" y="${TOP+3*BAND_H+(LANE_Y[1]+LANE_Y[0])/2+3}" text-anchor="middle" font-size="7" font-weight="700" style="fill:#e8c35a">121</text>`;
+  // Front peg: big with a thick white ring. Back peg: smaller, same colour, solid, with a thin white ring.
   for(const p of[1,0])for(const k of['b','f'])
-    h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?4.6:3.4}" fill="${PCOL[p]}" ${k==='b'?'opacity=".65" stroke="#0006" stroke-width=".8"':'stroke="#fff" stroke-width="1.2"'} style="transform:translate(${START_X}px,${TOP+LANE_Y[p]}px)"/>`;
+    h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?5:3.6}" fill="${PCOL[p]}" stroke="#fff" stroke-width="${k==='f'?1.8:1.1}" style="transform:translate(${START_X}px,${TOP+LANE_Y[p]}px)"/>`;
   $('board').innerHTML=`<div id="scorebar">
       <span class="sc"><span class="dot" style="background:${PCOL[1]}"></span>NPC <b id="sc1">0</b></span>
       <span class="sc"><small>first to 121</small></span>

@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
-  "notes": "First release",
+  "version": "1.1.0",
+  "notes": "Cribbage board, hints, undo, difficulty levels, stats",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

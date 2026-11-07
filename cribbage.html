@@ -592,8 +592,10 @@ async function pegging(A){
       const r=pegPoints(G.pile,G.count);
       if(r.pts)addScore(cur,r.pts,r.notes.join(', '));
       last=cur;
-      if(G.count===31){await A(pause(800));G.pile=[];G.count=0;last=null}
-      else if(left()===0){addScore(cur,1,'last card')}
+      if(G.count===31){
+        // keep the pile on the table after the very last card so it can be seen before counting
+        if(left()>0){await A(pause(800));G.pile=[];G.count=0;last=null}
+      }else if(left()===0){addScore(cur,1,'last card')}
       cur=1-cur;
     }else if(canPlay(1-cur).length){
       log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();await A(pause(900));cur=1-cur;
@@ -605,6 +607,8 @@ async function pegging(A){
     }
   }
   G.turn=null;
+  // a moment to see the last card and its points before the counting starts
+  status('That was the last card — time to count');render();await A(pause(1800));
 }
 
 async function round(A){

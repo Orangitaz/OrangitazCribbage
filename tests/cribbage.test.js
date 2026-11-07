@@ -274,6 +274,29 @@ test('difficulty ordering: Hard and Normal clearly beat Easy', async () => {
   assert.ok(winsNorm >= 55, `normal won only ${winsNorm}/100 against easy`);
 });
 
+test('there is a pause after the last card of the play before the counting starts', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`var events=[];
+    sleep=ms=>{events.push(ms);return Promise.resolve()};
+    showPanel=async()=>{events.push('show');throw{abort:true}};`);
+  await g.run('newGame()');
+  const ev = g.run('events');
+  const i = ev.indexOf('show');
+  assert.ok(i > 0, 'the count was reached');
+  assert.ok(ev[i - 1] >= 1500, `expected a pause of at least 1.5s right before counting, got ${ev[i - 1]}ms`);
+});
+test('the pause is shortened by "skip animations"', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`settings.fast=true;var events=[];
+    sleep=ms=>{events.push(ms);return Promise.resolve()};
+    showPanel=async()=>{events.push('show');throw{abort:true}};`);
+  await g.run('newGame()');
+  const ev = g.run('events');
+  assert.ok(ev.every(x => x === 'show' || x <= 120), 'no long pauses when animations are skipped');
+});
+
 test('stats are recorded by the game and old 1.0 records are migrated', async () => {
   const g = loadGame();
   g.store.set('crib-rec', JSON.stringify({ w: 4, l: 2 }));

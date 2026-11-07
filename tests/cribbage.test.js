@@ -123,6 +123,26 @@ test('version compare', () => {
   assert.equal(L.cmpVer('1.0', '1.0.0'), 0);
 });
 
+test('board: every score 1-120 has its own hole, in reading order; 0 is the start and 121 is home', () => {
+  assert.deepEqual(L.pegCell(0), { start: true });
+  assert.deepEqual(L.pegCell(-3), { start: true });
+  assert.deepEqual(L.pegCell(121), { home: true });
+  const seen = new Set();
+  let prev = -1;
+  for (let sc = 1; sc <= 120; sc++) {
+    const c = L.pegCell(sc);
+    assert.ok(c.band >= 0 && c.band < 4 && c.col >= 0 && c.col < 30, `score ${sc}`);
+    const idx = c.band * 30 + c.col;
+    assert.ok(idx > prev, 'holes advance left to right, top to bottom');
+    prev = idx; seen.add(idx);
+  }
+  assert.equal(seen.size, 120);
+  assert.deepEqual(L.pegCell(30), { band: 0, col: 29 });
+  assert.deepEqual(L.pegCell(31), { band: 1, col: 0 });
+  assert.deepEqual(L.pegCell(61), { band: 2, col: 0 });   // double skunk line sits before 61
+  assert.deepEqual(L.pegCell(91), { band: 3, col: 0 });   // skunk line sits before 91
+});
+
 test('stats: wins, losses, streaks, skunks, per difficulty', () => {
   const s = L.emptyStats();
   L.recordGame(s, { won: true, loserScore: 100, level: 'normal' });

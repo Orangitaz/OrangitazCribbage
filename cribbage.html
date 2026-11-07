@@ -16,9 +16,14 @@ button{font-family:inherit}
 .chip{font-size:12px;background:#0006;border-radius:12px;padding:3px 10px}
 #menuBtn{background:#0006;color:#f3efe0;border:1px solid #fff3;border-radius:14px;padding:4px 12px;font-size:13px}
 /* board */
-#board{background:#6b4423;border-radius:10px;padding:4px 6px;box-shadow:inset 0 0 0 2px #3d2512}
+#board{background:#6b4423;border-radius:10px;padding:6px 8px 4px;box-shadow:inset 0 0 0 2px #3d2512}
+#scorebar{display:flex;justify-content:space-between;align-items:center;margin:0 2px 4px}
+.sc{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:700}
+.sc .dot{width:14px;height:14px;border-radius:50%;border:2px solid #fff8}
+.sc b{font-size:24px;font-variant-numeric:tabular-nums;line-height:1}
+.sc small{opacity:.75;font-size:12px;font-weight:400}
 #board svg{display:block;width:100%;height:auto}
-#board text{fill:#f3efe0;font-size:9px;font-weight:700;font-family:system-ui,sans-serif}
+#board svg text{fill:#f3efe0;font-family:system-ui,sans-serif}
 .pegc{transition:transform .55s ease}
 body.fast .pegc{transition-duration:.12s}
 /* table */
@@ -355,6 +360,13 @@ function recordGame(st,g){
     if(g.loserScore<61)st.doubleAgainst++;
   }
 }
+// Where a score sits on the board: four bands of 30 holes (1-30, 31-60, 61-90, 91-120),
+// plus a start spot (0) and a home spot (121).
+function pegCell(score){
+  if(score<=0)return{start:true};
+  if(score>=121)return{home:true};
+  return{band:Math.floor((score-1)/30),col:(score-1)%30};
+}
 // ==END LOGIC==
 
 /* ---------- UI + game flow ---------- */
@@ -400,40 +412,62 @@ function status(t){$('msg').textContent=t}
 function log(t){G.log.push(t);if(G.log.length>2)G.log.shift();$('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('')}
 
 /* ---------- board ---------- */
-const BX0=34,PITCH=4.6,GAP=3.2,HOME_X=18;
+// Four bands, read left to right like text. Each band has an NPC lane (top) and a player lane (bottom).
+const BX0=24,PITCH=10,GAP=5,BAND_H=40,TOP=4;
 const holeX=c=>BX0+c*PITCH+Math.floor(c/5)*GAP;
-const ROWS={1:{out:20,back:32,label:11},0:{out:62,back:74,label:53}};
+const LANE_Y={1:11,0:29};                 // offset inside a band: NPC lane, player lane
+const START_X=9,HOME_X=BX0+29*PITCH+5*GAP+16;
 const PCOL={0:'#4fc3f7',1:'#ff8a65'};
-function pegPos(p,s){
-  const r=ROWS[p];
-  if(s<=0)return{x:HOME_X,y:r.out};
-  if(s<=60)return{x:holeX(s-1),y:r.out};
-  if(s<=120)return{x:holeX(120-s),y:r.back};
-  return{x:HOME_X,y:r.back};
+function pegPos(p,score){
+  const c=pegCell(score);
+  if(c.start)return{x:START_X,y:TOP+LANE_Y[p]};
+  if(c.home)return{x:HOME_X,y:TOP+3*BAND_H+LANE_Y[p]};
+  return{x:holeX(c.col),y:TOP+c.band*BAND_H+LANE_Y[p]};
 }
 function initBoard(){
-  let h='<svg viewBox="0 0 360 86" role="img" aria-label="Cribbage board"><rect x="0" y="0" width="360" height="86" rx="8" fill="#7a4e2a"/>';
-  for(const p of[1,0]){
-    const r=ROWS[p];
-    h+=`<text id="nm${p}" x="6" y="${r.label}"></text>`;
-    for(const y of[r.out,r.back])for(let c=0;c<60;c++)h+=`<circle cx="${holeX(c).toFixed(1)}" cy="${y}" r="1.2" fill="#2a1608"/>`;
-    h+=`<circle cx="${HOME_X}" cy="${r.out}" r="2.2" fill="#2a1608"/><circle cx="${HOME_X}" cy="${r.back}" r="2.2" fill="#2a1608"/>`;
-    const sx=(holeX(29)+holeX(30))/2;   // skunk line: between 91 and 90
-    h+=`<line x1="${sx.toFixed(1)}" x2="${sx.toFixed(1)}" y1="${r.back-5}" y2="${r.back+5}" stroke="#e8c35a" stroke-width="1"/>`;
-    h+=`<text x="${(sx+2).toFixed(1)}" y="${r.back+10}" style="font-size:5px;opacity:.8">skunk 91</text>`;
+  const W=360,H=TOP*2+4*BAND_H;
+  let h=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cribbage board"><rect width="${W}" height="${H}" rx="8" fill="#8a5a2e"/>`;
+  for(let b=0;b<4;b++){
+    const y0=TOP+b*BAND_H;
+    // lane backgrounds
+    for(const p of[1,0]){
+      h+=`<rect x="${BX0-9}" y="${y0+LANE_Y[p]-8}" width="${holeX(29)-BX0+18}" height="16" rx="8" fill="${PCOL[p]}" opacity=".24"/>`;
+      for(let c=0;c<30;c++)h+=`<circle cx="${holeX(c)}" cy="${y0+LANE_Y[p]}" r="3" fill="#2a1608"/>`;
+    }
+    // score numbers between the lanes, at the end of every group of 5
+    for(let g=0;g<6;g++){
+      const col=g*5+4,sc=b*30+col+1;
+      h+=`<text x="${holeX(col)}" y="${y0+(LANE_Y[1]+LANE_Y[0])/2+3.2}" text-anchor="middle" font-size="9" font-weight="700" opacity="${sc%10===0?1:.7}">${sc}</text>`;
+    }
+    // dashed markers: double skunk line at 61, skunk line at 91
+    if(b===2||b===3){
+      const x=BX0-10,color=b===3?'#e8c35a':'#e0805f';
+      h+=`<line x1="${x}" x2="${x}" y1="${y0+1}" y2="${y0+BAND_H-5}" stroke="${color}" stroke-width="1.6" stroke-dasharray="3 2"/>`;
+      h+=`<text x="${x+3}" y="${y0+5.5}" font-size="6" style="fill:${color}">${b===3?'91 skunk line':'61 double skunk line'}</text>`;
+    }
   }
+  // start and home holes
+  for(const p of[1,0]){
+    h+=`<circle cx="${START_X}" cy="${TOP+LANE_Y[p]}" r="3.6" fill="#2a1608"/>`;
+    h+=`<circle cx="${HOME_X}" cy="${TOP+3*BAND_H+LANE_Y[p]}" r="4.4" fill="#2a1608" stroke="#e8c35a" stroke-width="1"/>`;
+  }
+  h+=`<text x="${HOME_X}" y="${TOP+3*BAND_H+(LANE_Y[1]+LANE_Y[0])/2+3}" text-anchor="middle" font-size="7" font-weight="700" style="fill:#e8c35a">121</text>`;
   for(const p of[1,0])for(const k of['b','f'])
-    h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?3.1:2.5}" fill="${PCOL[p]}" ${k==='b'?'opacity=".6"':'stroke="#fff" stroke-width=".8"'} style="transform:translate(${HOME_X}px,${ROWS[p].out}px)"/>`;
-  $('board').innerHTML=h+'</svg>';
+    h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?4.6:3.4}" fill="${PCOL[p]}" ${k==='b'?'opacity=".65" stroke="#0006" stroke-width=".8"':'stroke="#fff" stroke-width="1.2"'} style="transform:translate(${START_X}px,${TOP+LANE_Y[p]}px)"/>`;
+  $('board').innerHTML=`<div id="scorebar">
+      <span class="sc"><span class="dot" style="background:${PCOL[1]}"></span>NPC <b id="sc1">0</b></span>
+      <span class="sc"><small>first to 121</small></span>
+      <span class="sc"><span class="dot" style="background:${PCOL[0]}"></span>You <b id="sc0">0</b></span>
+    </div>`+h+'</svg>';
 }
 function renderBoard(){
   if(!G)return;
   for(const p of[0,1]){
     for(const k of['f','b']){
-      const s=k==='f'?G.scores[p]:G.prev[p],pos=pegPos(p,s),e=$('peg'+p+k);
+      const sc=k==='f'?G.scores[p]:G.prev[p],pos=pegPos(p,sc),e=$('peg'+p+k);
       if(e)e.style.transform=`translate(${pos.x}px,${pos.y}px)`;
     }
-    const n=$('nm'+p);if(n)n.textContent=`${p?'NPC':'You'}   ${G.scores[p]}`;
+    const n=$('sc'+p);if(n)n.textContent=G.scores[p];
   }
 }
 

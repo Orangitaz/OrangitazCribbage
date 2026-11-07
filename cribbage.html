@@ -52,6 +52,9 @@ html,body{margin:0;height:100%;background:var(--felt2);color:#f3efe0;font-family
 #btn.hide{visibility:hidden}
 #log{font-size:12px;opacity:.85;height:50px;overflow:hidden;text-align:center;line-height:1.35}
 #log div:last-child{color:var(--gold)}
+#ver{text-align:center;font-size:11px;opacity:.8;padding-bottom:2px}
+#ver a{color:var(--gold);text-decoration:underline;cursor:pointer}
+#ver b{color:var(--gold)}
 /* overlay */
 #ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:14px;z-index:5}
 #ov.on{display:flex}
@@ -80,6 +83,7 @@ html,body{margin:0;height:100%;background:var(--felt2);color:#f3efe0;font-family
   <div id="mine"></div>
   <button id="btn" class="hide"></button>
   <div id="log"></div>
+  <div id="ver"></div>
 </div>
 <div id="ov"><div class="panel" id="panel"></div></div>
 
@@ -171,6 +175,11 @@ function npcPeg(playable,pile,count){
     if(s>bs){bs=s;best=c}
   }
   return best;
+}
+function cmpVer(a,b){
+  const x=String(a).split('.').map(n=>parseInt(n,10)||0),y=String(b).split('.').map(n=>parseInt(n,10)||0);
+  for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0?1:-1}
+  return 0;
 }
 // ==END LOGIC==
 
@@ -354,6 +363,42 @@ async function newGame(){
   try{while(true)await round()}
   catch(e){if(e&&e.win!==undefined)gameOver(e.win);else{console.error(e);throw e}}
 }
+/* ---------- updates ---------- */
+// Bump APP_VERSION and version.json together when you release a new version.
+const APP_VERSION='1.0.0';
+const VERSION_URL='https://raw.githubusercontent.com/Orangitaz/OrangitazCribbage/main/version.json';
+const RELEASES_URL='https://github.com/Orangitaz/OrangitazCribbage/releases/latest';
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function renderVer(extra){
+  $('ver').innerHTML=`v${APP_VERSION} · ${extra||'<a id="chk">Check for updates</a>'}`;
+  const c=$('chk');if(c)c.onclick=()=>checkUpdate(true);
+}
+async function checkUpdate(manual){
+  if(manual)renderVer('Checking…');
+  try{
+    const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),8000);
+    const res=await fetch(VERSION_URL+'?t='+Date.now(),{cache:'no-store',signal:ctl.signal});
+    clearTimeout(to);
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const info=await res.json();
+    try{localStorage.setItem('crib-lastcheck',String(Date.now()))}catch(e){}
+    if(cmpVer(info.version,APP_VERSION)>0){
+      const url=/^https:\/\/github\.com\//.test(info.url||'')?info.url:RELEASES_URL;
+      renderVer(`<b>Update v${esc(info.version)} available</b> — <a href="${esc(url)}" target="_blank" rel="noopener">Download</a>${info.notes?`<br>${esc(info.notes)}`:''}`);
+    }else if(manual)renderVer(`Up to date · <a id="chk">Check again</a>`);
+    else renderVer();
+  }catch(e){
+    if(manual)renderVer(`Couldn't check for updates · <a id="chk">Try again</a>`);
+    else renderVer();
+  }
+}
+renderVer();
+(function autoCheck(){
+  let last=0;try{last=+localStorage.getItem('crib-lastcheck')||0}catch(e){}
+  if(Date.now()-last>24*3600*1000)checkUpdate(false);
+})();
+
 newGame();
 </script>
 </body>

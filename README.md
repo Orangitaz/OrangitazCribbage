@@ -22,7 +22,24 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 
 ## Android
 
-The game is plain HTML/JS, so it can be wrapped as an Android app (for example an Android Studio WebView project that loads `cribbage.html` from assets, or Capacitor). No wrapper project is included yet.
+The `app/` folder is a small WebView wrapper (Kotlin, min Android 8.0). At build time `cribbage.html` is copied in as the app's page, so the game has one source of truth. Links that leave the game, such as the update Download link, open in your browser.
+
+### Get an APK from GitHub
+
+- **On demand:** Actions tab, "Build Android APK", "Run workflow". When it finishes, download the `OrangitazCribbage-apk` artifact from the run page (it is a zip containing the APK).
+- **As a release:** bump the version in `cribbage.html` and `version.json`, then push a matching tag, for example `v1.0.1`. The workflow builds the APK and attaches it to a GitHub Release, which is where the in-app update link points. If the tag and the two version numbers disagree, the build fails on purpose.
+
+Install the APK on your phone by opening it and allowing installs from your browser or file manager when asked.
+
+### Signing (do this once before your first real release)
+
+Without signing secrets, the APK is signed with a throwaway debug key. It installs, but a later build signed with a different key can't update it in place; you'd have to uninstall first (which also clears your win/loss record). To fix that, make one key and store it as repository secrets:
+
+1. `keytool -genkeypair -v -keystore release.jks -alias cribbage -keyalg RSA -keysize 2048 -validity 10000`
+2. `base64 -w0 release.jks` and save the output as the secret `KEYSTORE_BASE64`
+3. Add secrets `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`cribbage`) and `KEY_PASSWORD`
+
+Keep `release.jks` somewhere safe and never commit it. If you lose it you can't ship updates to existing installs.
 
 ## Updates
 

@@ -7,21 +7,20 @@
 <title>Cribbage</title>
 <style>
 :root{--felt:#0f4d32;--felt2:#0b3a26;--card:#fffdf6;--red:#c62828;--gold:#e8c35a;--ink:#16221b}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:manipulation}
 html,body{margin:0;height:100%;background:var(--felt2);color:#f3efe0;font-family:system-ui,-apple-system,Roboto,sans-serif}
-#app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;padding:8px 10px;gap:8px;background:radial-gradient(ellipse at 50% 30%,var(--felt),var(--felt2))}
+#app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;padding:6px 10px;gap:6px;background:radial-gradient(ellipse at 50% 30%,var(--felt),var(--felt2))}
+button{font-family:inherit}
+/* top bar */
+#top{display:flex;justify-content:space-between;align-items:center}
+.chip{font-size:12px;background:#0006;border-radius:12px;padding:3px 10px}
+#menuBtn{background:#0006;color:#f3efe0;border:1px solid #fff3;border-radius:14px;padding:4px 12px;font-size:13px}
 /* board */
-#board{background:#6b4423;border-radius:10px;padding:8px 10px;box-shadow:inset 0 0 0 2px #3d2512}
-.lane{display:flex;align-items:center;gap:8px;margin:4px 0}
-.lane .nm{width:42px;font-size:12px;font-weight:700}
-.lane .sc{width:28px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
-.track{position:relative;flex:1;height:16px;border-radius:8px;background:#2f1b0c;
- background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/24.2 - 2px),#6b4a2c calc(100%/24.2 - 2px),#6b4a2c calc(100%/24.2))}
-.track .skunk{position:absolute;left:75.2%;top:0;bottom:0;width:2px;background:#c9a15c}
-.peg{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);transition:left .5s}
-.peg.f{box-shadow:0 0 0 2px #fff6}
-.p0 .peg{background:#4fc3f7}.p1 .peg{background:#ff8a65}
-.peg.b{opacity:.55;width:9px;height:9px}
+#board{background:#6b4423;border-radius:10px;padding:4px 6px;box-shadow:inset 0 0 0 2px #3d2512}
+#board svg{display:block;width:100%;height:auto}
+#board text{fill:#f3efe0;font-size:9px;font-weight:700;font-family:system-ui,sans-serif}
+.pegc{transition:transform .55s ease}
+body.fast .pegc{transition-duration:.12s}
 /* table */
 #table{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
 .row{display:flex;align-items:center;justify-content:center;gap:4px;min-height:60px}
@@ -40,36 +39,53 @@ html,body{margin:0;height:100%;background:var(--felt2);color:#f3efe0;font-family
 .card .s{align-self:center;font-size:1.7em}
 .card .r2{align-self:flex-end;transform:rotate(180deg)}
 .card.back{background:repeating-linear-gradient(45deg,#2b4f9e,#2b4f9e 5px,#1e3a78 5px,#1e3a78 10px);border:2px solid #fffdf6}
-.card.sm{width:42px;font-size:13px}
 #mine .card{transition:transform .12s,opacity .12s}
+#mine .card.hint{box-shadow:0 0 0 3px #4fc3f7,0 3px 8px #000a}
 #mine .card.sel{transform:translateY(-14px);box-shadow:0 0 0 3px var(--gold),0 3px 6px #000a}
 #mine .card.dim{opacity:.4}
 #mine .card.ok{box-shadow:0 0 0 2px #8fd18f,0 1px 3px #0008}
+#mine .card.ok.hint{box-shadow:0 0 0 3px #4fc3f7,0 3px 8px #000a;opacity:1}
 #mine{display:flex;justify-content:center;gap:clamp(2px,1vw,6px);min-height:90px;align-items:flex-end;padding-top:14px}
-#msg{text-align:center;min-height:36px;font-size:15px;display:flex;align-items:center;justify-content:center}
-#btn{background:var(--gold);color:#222;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;width:100%}
-#btn:disabled{opacity:.35}
-#btn.hide{visibility:hidden}
-#log{font-size:12px;opacity:.85;height:50px;overflow:hidden;text-align:center;line-height:1.35}
+#msg{text-align:center;min-height:36px;font-size:15px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+#btnrow{display:flex;gap:8px;min-height:46px}
+#btnrow button{flex:1;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;background:var(--gold);color:#222}
+#btnrow button.alt{background:#0008;color:var(--gold);border:1px solid var(--gold)}
+#btnrow button:disabled{opacity:.35}
+#btnrow button.hide{display:none}
+#log{font-size:12px;opacity:.85;height:36px;overflow:hidden;text-align:center;line-height:1.35}
 #log div:last-child{color:var(--gold)}
 #ver{text-align:center;font-size:11px;opacity:.8;padding-bottom:2px}
 #ver a{color:var(--gold);text-decoration:underline;cursor:pointer}
 #ver b{color:var(--gold)}
-/* overlay */
-#ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:14px;z-index:5}
-#ov.on{display:flex}
-.panel{background:var(--felt);border:2px solid var(--gold);border-radius:14px;padding:14px;width:100%;max-width:440px}
+/* overlays */
+.ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:14px;z-index:5;overflow:auto}
+.ov.on{display:flex}
+#ov2{z-index:6}
+.panel{background:var(--felt);border:2px solid var(--gold);border-radius:14px;padding:14px;width:100%;max-width:440px;max-height:100%;overflow:auto}
 .panel h2{margin:0 0 8px;font-size:17px;color:var(--gold)}
 .panel .cards{display:flex;justify-content:center;gap:4px;flex-wrap:wrap;margin-bottom:10px}
 .panel .cards .sep{width:10px}
 .panel ul{list-style:none;margin:0 0 8px;padding:0;font-size:14px}
-.panel li{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #fff2}
+.panel li{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #fff2}
 .panel .tot{font-size:20px;font-weight:800;text-align:right;margin-bottom:10px}
 .panel p{margin:4px 0 10px;text-align:center}
+.panel .lbl{font-size:13px;margin:10px 0 4px;opacity:.9}
+.panel .lbl small{opacity:.7}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;padding:9px;border-radius:10px;border:1px solid var(--gold);background:#0006;color:#f3efe0;font-size:14px}
+.seg button.on{background:var(--gold);color:#222;font-weight:800}
+.chk{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:14px}
+.chk input{width:20px;height:20px}
+.gold,.opt{display:block;width:100%;border-radius:24px;padding:12px;font-size:16px;font-weight:800;margin-top:8px;border:0}
+.gold{background:var(--gold);color:#222}
+.opt{background:#0008;color:var(--gold);border:1px solid var(--gold)}
+.opt.warn{background:#7a1f1f;color:#fff;border-color:#c66}
+.sub{font-size:12px;opacity:.75;margin-top:8px;text-align:center}
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="top"><span class="chip" id="lvl"></span><button id="menuBtn">☰ Menu</button></div>
   <div id="board"></div>
   <div id="table">
     <div class="row" id="npc"></div>
@@ -81,11 +97,12 @@ html,body{margin:0;height:100%;background:var(--felt2);color:#f3efe0;font-family
   </div>
   <div id="msg"></div>
   <div id="mine"></div>
-  <button id="btn" class="hide"></button>
+  <div id="btnrow"><button id="btn" class="hide"></button><button id="btn2" class="alt hide">Hint</button></div>
   <div id="log"></div>
   <div id="ver"></div>
 </div>
-<div id="ov"><div class="panel" id="panel"></div></div>
+<div class="ov" id="ov"><div class="panel" id="panel"></div></div>
+<div class="ov" id="ov2"><div class="panel" id="panel2"></div></div>
 
 <script>
 // ==LOGIC==
@@ -143,6 +160,7 @@ function pegPoints(pile,count){
   return{pts,notes};
 }
 
+// Quick rule-of-thumb value of two discarded cards for the crib (Normal NPC).
 function cribVal(d){
   const[a,b]=d;let v=0;
   if(a.r===b.r)v+=2;
@@ -152,89 +170,298 @@ function cribVal(d){
   if(a.r===5||b.r===5)v+=0.5;
   return v;
 }
-function npcDiscard(hand,isDealer){
+// Hard NPC / hints: value a crib by sampling. The same random samples (two extra crib cards + a starter)
+// are used for every candidate discard, so candidates are compared fairly.
+function makeSamples(U,n){
+  const out=[];
+  for(let k=0;k<n;k++){
+    const a=Math.floor(Math.random()*U);
+    let b;do{b=Math.floor(Math.random()*U)}while(b===a);
+    let c;do{c=Math.floor(Math.random()*U)}while(c===a||c===b);
+    out.push([a,b,c]);
+  }
+  return out;
+}
+function cribAvg(disc,unseen,samples){
+  let t=0;
+  for(const[a,b,c]of samples)t+=scoreHand([disc[0],disc[1],unseen[a],unseen[b]],unseen[c],true).total;
+  return t/samples.length;
+}
+// Choose the two cards to put in the crib. level: 'easy' | 'normal' | 'hard'.
+function bestDiscard(hand,isDealer,level){
   const known=new Set(hand.map(key));
   const unseen=newDeck().filter(c=>!known.has(key(c)));
-  let best=null,bs=-1e9;
+  const samples=level==='hard'?makeSamples(unseen.length,150):null;
+  let best=null;
   for(let i=0;i<6;i++)for(let j=i+1;j<6;j++){
     const keep=hand.filter((_,k)=>k!==i&&k!==j),disc=[hand[i],hand[j]];
     let t=0;for(const s of unseen)t+=scoreHand(keep,s,false).total;
-    const sc=t/unseen.length+(isDealer?1:-1)*cribVal(disc)+Math.random()*0.05;
-    if(sc>bs){bs=sc;best=disc}
+    const keepAvg=t/unseen.length;
+    let cribV=0;
+    if(level==='hard')cribV=cribAvg(disc,unseen,samples);
+    else if(level==='normal')cribV=cribVal(disc);
+    let score=keepAvg+(isDealer?1:-1)*cribV;
+    if(level==='easy')score=keepAvg+(Math.random()-0.5)*6;
+    else if(level==='normal')score+=Math.random()*0.05;
+    if(!best||score>best.score)best={disc,keep,keepAvg,cribV,score};
   }
   return best;
 }
-function npcPeg(playable,pile,count){
+// Chance the opponent, holding m random cards from the unseen pool, holds at least one of n "bad" cards.
+function pHasAny(U,n,m){
+  if(n<=0||m<=0)return 0;
+  let p0=1;
+  for(let j=0;j<m;j++){p0*=Math.max(0,U-n-j)/(U-j)}
+  return 1-p0;
+}
+// Plays out the rest of a pegging round with a quick greedy policy for both sides.
+// h0 = our remaining cards, h1 = the opponent's, turn = who plays next (0 us, 1 opponent),
+// last = who played the last card (or null). Returns points we score minus points they score.
+function pegSim(pile,count,h0,h1,turn,last){
+  pile=pile.slice();
+  const h=[h0.slice(),h1.slice()];
+  let diff=0,guard=0;
+  const add=(p,n)=>{diff+=p===0?n:-n};
+  while(h[0].length+h[1].length>0&&guard++<80){
+    const pl=h[turn].filter(c=>count+val(c)<=31);
+    if(pl.length){
+      let best=null,bs=-1e9;
+      for(const c of pl){
+        const np=[...pile,c],cnt=count+val(c);
+        let sc=pegPoints(np,cnt).pts*10;
+        if(cnt===5||cnt===21)sc-=4;else if(cnt===10)sc-=2;
+        sc+=Math.random()*0.5;
+        if(sc>bs){bs=sc;best=c}
+      }
+      h[turn]=h[turn].filter(x=>x!==best);
+      pile.push(best);count+=val(best);
+      add(turn,pegPoints(pile,count).pts);
+      last=turn;
+      if(count===31){pile=[];count=0;last=null}
+      else if(h[0].length+h[1].length===0)add(turn,1);   // last card
+      turn=1-turn;
+    }else if(h[1-turn].some(c=>count+val(c)<=31)){
+      turn=1-turn;                                       // "go": the other side carries on
+    }else{
+      if(last!==null)add(last,1);                        // point for go
+      pile=[];count=0;
+      turn=last!==null?1-last:turn;last=null;
+    }
+  }
+  return diff;
+}
+// Choose a card to play while pegging.
+// o: {playable, pile, count, level, unseen, oppLeft, myHand, det, samples}
+//  unseen = cards we have not seen; oppLeft = cards the opponent still holds;
+//  myHand = all our remaining cards; det = no random tie-breaking.
+function choosePlay(o){
+  const{playable,pile,count,level}=o,unseen=o.unseen||[],oppLeft=o.oppLeft||0;
+  const ptsOf=c=>pegPoints([...pile,c],count+val(c)).pts;
+  if(level==='easy'){
+    let best=playable[0],bp=-1;
+    for(const c of playable){const p=ptsOf(c);if(p>bp){bp=p;best=c}}
+    if(bp>0&&Math.random()<0.65)return best;
+    return playable[Math.floor(Math.random()*playable.length)];
+  }
+  if(level==='hard'&&o.myHand&&unseen.length>=oppLeft&&oppLeft>0&&playable.length>1){
+    // Look ahead: guess the opponent's cards from what we have not seen, play out the round for each
+    // candidate, and keep the one with the best average point difference. Every candidate faces the same guesses.
+    const N=o.samples||60,tot=playable.map(()=>0);
+    for(let k=0;k<N;k++){
+      const pool=unseen.slice(),opp=[];
+      for(let i=0;i<oppLeft;i++)opp.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+      playable.forEach((c,i)=>{
+        const np=[...pile,c],cnt=count+val(c),rest=o.myHand.filter(x=>x!==c);
+        let d=pegPoints(np,cnt).pts;
+        if(cnt===31)d+=pegSim([],0,rest,opp,1,null);
+        else if(rest.length+opp.length===0)d+=1;
+        else d+=pegSim(np,cnt,rest,opp,1,0);
+        tot[i]+=d;
+      });
+    }
+    let bi=0,bv=-1e9;
+    tot.forEach((t,i)=>{const v=t/N+(o.det?0:Math.random()*0.01);if(v>bv){bv=v;bi=i}});
+    return playable[bi];
+  }
   let best=null,bs=-1e9;
   for(const c of playable){
     const np=[...pile,c],cnt=count+val(c);
     let s=pegPoints(np,cnt).pts*10;
-    if(cnt===5||cnt===21)s-=4;else if(cnt===10)s-=2;
+    if(level==='hard'&&unseen.length&&oppLeft){
+      // one-move lookahead: expected points the opponent can answer with
+      const byPts=new Map();
+      for(const u of unseen){
+        const cu=cnt+val(u);
+        if(cu>31)continue;
+        const p=pegPoints([...np,u],cu).pts;
+        if(p>0)byPts.set(p,(byPts.get(p)||0)+1);
+      }
+      const vals=[...byPts.keys()].sort((a,b)=>a-b);
+      let e=0,prev=0;
+      for(const v of vals){
+        let n=0;for(const[k,c2]of byPts)if(k>=v)n+=c2;
+        e+=(v-prev)*pHasAny(unseen.length,n,oppLeft);prev=v;
+      }
+      s-=10*e;
+    }else{
+      if(cnt===5||cnt===21)s-=4;else if(cnt===10)s-=2;
+    }
     if(pile.length===0){s-=val(c)*0.3;if(c.r===5)s-=3}
-    s+=Math.random()*0.5;
+    if(!o.det)s+=Math.random()*0.5;
     if(s>bs){bs=s;best=c}
   }
   return best;
 }
+
 function cmpVer(a,b){
   const x=String(a).split('.').map(n=>parseInt(n,10)||0),y=String(b).split('.').map(n=>parseInt(n,10)||0);
   for(let i=0;i<Math.max(x.length,y.length);i++){const d=(x[i]||0)-(y[i]||0);if(d)return d>0?1:-1}
   return 0;
+}
+
+// ---- stats (pure; saved by the UI) ----
+function emptyStats(){
+  return{games:0,w:0,l:0,streak:0,bestStreak:0,skunksFor:0,doubleFor:0,skunksAgainst:0,doubleAgainst:0,
+    handN:0,handSum:0,bestHand:0,cribN:0,cribSum:0,bestCrib:0,
+    byDiff:{easy:{w:0,l:0},normal:{w:0,l:0},hard:{w:0,l:0}}};
+}
+function mergeStats(raw){
+  const d=emptyStats();
+  if(!raw||typeof raw!=='object')return d;
+  for(const k of Object.keys(d)){
+    if(k==='byDiff'){
+      for(const l of['easy','normal','hard']){
+        const r=raw.byDiff&&raw.byDiff[l];
+        if(r){d.byDiff[l].w=+r.w||0;d.byDiff[l].l=+r.l||0}
+      }
+    }else if(typeof raw[k]==='number'&&isFinite(raw[k]))d[k]=raw[k];
+  }
+  return d;
+}
+function recordHand(st,pts,isCrib){
+  if(isCrib){st.cribN++;st.cribSum+=pts;st.bestCrib=Math.max(st.bestCrib,pts)}
+  else{st.handN++;st.handSum+=pts;st.bestHand=Math.max(st.bestHand,pts)}
+}
+function recordGame(st,g){
+  st.games++;
+  const d=st.byDiff[g.level]||(st.byDiff[g.level]={w:0,l:0});
+  if(g.won){
+    st.w++;d.w++;st.streak++;st.bestStreak=Math.max(st.bestStreak,st.streak);
+    if(g.loserScore<91)st.skunksFor++;
+    if(g.loserScore<61)st.doubleFor++;
+  }else{
+    st.l++;d.l++;st.streak=0;
+    if(g.loserScore<91)st.skunksAgainst++;
+    if(g.loserScore<61)st.doubleAgainst++;
+  }
 }
 // ==END LOGIC==
 
 /* ---------- UI + game flow ---------- */
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-let G=null;
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const fmt=c=>RANKS[c.r]+SUITS[c.s];
 const who=p=>p?'NPC':'You';
+let G=null,GEN=0,undoTimer=null;
 
-function cardEl(c,cls=''){
-  const red=c.s===1||c.s===2?' red':'';
-  return `<div class="card${red} ${cls}"><span>${RANKS[c.r]}</span><span class="s">${SUITS[c.s]}</span><span class="r2">${RANKS[c.r]}</span></div>`;
+/* settings + stats storage */
+function loadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('crib-settings'));
+    return{level:['easy','normal','hard'].includes(s&&s.level)?s.level:'normal',fast:!!(s&&s.fast)};
+  }catch(e){return{level:'normal',fast:false}}
 }
-function backEl(cls=''){return `<div class="card back ${cls}"></div>`}
+let settings=loadSettings();
+function saveSettings(){try{localStorage.setItem('crib-settings',JSON.stringify(settings))}catch(e){}}
+function applySettings(){document.body.classList.toggle('fast',!!settings.fast)}
+const pause=ms=>sleep(settings.fast?Math.min(ms,120):ms);
+
+function loadStats(){
+  try{
+    const raw=localStorage.getItem('crib-stats');
+    if(raw)return mergeStats(JSON.parse(raw));
+    const old=JSON.parse(localStorage.getItem('crib-rec'));   // record from version 1.0
+    if(old)return mergeStats({w:+old.w||0,l:+old.l||0,games:(+old.w||0)+(+old.l||0)});
+  }catch(e){}
+  return emptyStats();
+}
+let stats=loadStats();
+function saveStats(){try{localStorage.setItem('crib-stats',JSON.stringify(stats))}catch(e){}}
+
+/* cards */
+function cardEl(c,cls='',i=null){
+  const red=c.s===1||c.s===2?' red':'';
+  return `<div${i===null?'':` data-i="${i}"`} class="card${red} ${cls}"><span>${RANKS[c.r]}</span><span class="s">${SUITS[c.s]}</span><span class="r2">${RANKS[c.r]}</span></div>`;
+}
+const backEl=()=>'<div class="card back"></div>';
 
 function status(t){$('msg').textContent=t}
-function log(t){G.log.push(t);if(G.log.length>3)G.log.shift();$('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('')}
+function log(t){G.log.push(t);if(G.log.length>2)G.log.shift();$('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('')}
 
+/* ---------- board ---------- */
+const BX0=34,PITCH=4.6,GAP=3.2,HOME_X=18;
+const holeX=c=>BX0+c*PITCH+Math.floor(c/5)*GAP;
+const ROWS={1:{out:20,back:32,label:11},0:{out:62,back:74,label:53}};
+const PCOL={0:'#4fc3f7',1:'#ff8a65'};
+function pegPos(p,s){
+  const r=ROWS[p];
+  if(s<=0)return{x:HOME_X,y:r.out};
+  if(s<=60)return{x:holeX(s-1),y:r.out};
+  if(s<=120)return{x:holeX(120-s),y:r.back};
+  return{x:HOME_X,y:r.back};
+}
+function initBoard(){
+  let h='<svg viewBox="0 0 360 86" role="img" aria-label="Cribbage board"><rect x="0" y="0" width="360" height="86" rx="8" fill="#7a4e2a"/>';
+  for(const p of[1,0]){
+    const r=ROWS[p];
+    h+=`<text id="nm${p}" x="6" y="${r.label}"></text>`;
+    for(const y of[r.out,r.back])for(let c=0;c<60;c++)h+=`<circle cx="${holeX(c).toFixed(1)}" cy="${y}" r="1.2" fill="#2a1608"/>`;
+    h+=`<circle cx="${HOME_X}" cy="${r.out}" r="2.2" fill="#2a1608"/><circle cx="${HOME_X}" cy="${r.back}" r="2.2" fill="#2a1608"/>`;
+    const sx=(holeX(29)+holeX(30))/2;   // skunk line: between 91 and 90
+    h+=`<line x1="${sx.toFixed(1)}" x2="${sx.toFixed(1)}" y1="${r.back-5}" y2="${r.back+5}" stroke="#e8c35a" stroke-width="1"/>`;
+    h+=`<text x="${(sx+2).toFixed(1)}" y="${r.back+10}" style="font-size:5px;opacity:.8">skunk 91</text>`;
+  }
+  for(const p of[1,0])for(const k of['b','f'])
+    h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?3.1:2.5}" fill="${PCOL[p]}" ${k==='b'?'opacity=".6"':'stroke="#fff" stroke-width=".8"'} style="transform:translate(${HOME_X}px,${ROWS[p].out}px)"/>`;
+  $('board').innerHTML=h+'</svg>';
+}
 function renderBoard(){
-  const lane=(p)=>{
-    const pct=v=>Math.min(100,v/121*100);
-    return `<div class="lane p${p}"><span class="nm">${p?'NPC':'You'}</span>
-      <div class="track"><span class="skunk"></span>
-      <span class="peg b" style="left:${pct(G.prev[p])}%"></span>
-      <span class="peg f" style="left:${pct(G.scores[p])}%"></span></div>
-      <span class="sc">${G.scores[p]}</span></div>`;
-  };
-  $('board').innerHTML=lane(1)+lane(0);
+  if(!G)return;
+  for(const p of[0,1]){
+    for(const k of['f','b']){
+      const s=k==='f'?G.scores[p]:G.prev[p],pos=pegPos(p,s),e=$('peg'+p+k);
+      if(e)e.style.transform=`translate(${pos.x}px,${pos.y}px)`;
+    }
+    const n=$('nm'+p);if(n)n.textContent=`${p?'NPC':'You'}   ${G.scores[p]}`;
+  }
 }
 
+/* ---------- main render ---------- */
 function render(){
+  $('lvl').textContent=`NPC: ${cap(G.level)}`;
   renderBoard();
   const dealerBadge=p=>G.dealer===p?'<span class="badge d">Dealer</span>':'';
-  // NPC row
-  const n=G.phase==='peg'?G.peg[1].length:(G.phase==='discard'?6:0);
-  $('npc').innerHTML=(n?Array.from({length:n},()=>backEl()).join(''):'<span style="opacity:.6;font-size:13px">NPC</span>')+dealerBadge(1);
-  // mid
+  const n=G.phase==='peg'?G.peg[1].length:((G.phase==='discard'||G.phase==='confirm')?6:0);
+  $('npc').innerHTML=(n?Array.from({length:n},backEl).join(''):'<span style="opacity:.6;font-size:13px">NPC</span>')+dealerBadge(1);
   $('starter').innerHTML=G.starter?`<div style="margin-bottom:2px">Starter</div>${cardEl(G.starter)}`:'';
   $('cribinfo').innerHTML=`Crib<br><b>${G.crib.length}</b> cards<br>${G.dealer===0?'yours':"NPC's"}`;
   $('pile').innerHTML=G.pile.map(c=>cardEl(c)).join('');
   $('count').textContent=G.phase==='peg'?`Count: ${G.count}`:'';
-  // mine
-  const mine=$('mine');
-  if(G.phase==='discard'){
-    mine.innerHTML=G.hands[0].map((c,i)=>cardEl(c,G.sel.has(i)?'sel':'').replace('<div class="card','<div data-i="'+i+'" class="card')).join('');
+  const hint=i=>G.hint&&G.hint.has(i)?'hint':'';
+  if(G.phase==='discard'||G.phase==='confirm'){
+    $('mine').innerHTML=G.hands[0].map((c,i)=>cardEl(c,`${G.sel.has(i)?'sel ':''}${hint(i)}`,i)).join('');
   }else if(G.phase==='peg'){
-    mine.innerHTML=G.peg[0].map((c,i)=>{
+    $('mine').innerHTML=G.peg[0].map((c,i)=>{
       const ok=G.count+val(c)<=31&&G.turn===0;
-      return cardEl(c,ok?'ok':'dim').replace('<div class="card','<div data-i="'+i+'" class="card');
+      return cardEl(c,`${ok?'ok':'dim'} ${hint(i)}`,i);
     }).join('');
-  }else mine.innerHTML='';
-  // button
-  const b=$('btn');
-  if(G.phase==='discard'){b.className='';b.textContent='Send to crib';b.disabled=G.sel.size!==2}
-  else b.className='hide';
+  }else $('mine').innerHTML='';
+  const b=$('btn'),b2=$('btn2');
+  if(G.phase==='discard'){b.className='';b.textContent='Send to crib';b.disabled=G.sel.size!==2;b2.className='alt'}
+  else if(G.phase==='confirm'){b.className='';b.textContent=`Undo (${G.undoN})`;b.disabled=false;b2.className='alt hide'}
+  else if(G.phase==='peg'&&G.turn===0){b.className='hide';b2.className='alt'}
+  else{b.className='hide';b2.className='alt hide'}
 }
 
 $('mine').addEventListener('click',e=>{
@@ -242,6 +469,7 @@ $('mine').addEventListener('click',e=>{
   G.onCard(+el.dataset.i);
 });
 $('btn').addEventListener('click',()=>{if(G&&G.onBtn)G.onBtn()});
+$('btn2').addEventListener('click',()=>{if(G)showHint()});
 
 function addScore(p,pts,why){
   if(!pts)return;
@@ -251,32 +479,66 @@ function addScore(p,pts,why){
   if(G.scores[p]>=121)throw{win:p};
 }
 
+/* ---------- hints ---------- */
+function unseenFor(p){
+  const used=new Set([...G.orig[p],...G.playedAll,G.starter].filter(Boolean).map(key));
+  return newDeck().filter(c=>!used.has(key(c)));
+}
+function showHint(){
+  if(G.phase==='discard'){
+    const h=bestDiscard(G.hands[0],G.dealer===0,'hard');
+    G.hint=new Set(h.disc.map(c=>G.hands[0].indexOf(c)));
+    status(`Hint: send ${fmt(h.disc[0])} and ${fmt(h.disc[1])} — your hand then averages about ${h.keepAvg.toFixed(1)} points`);
+    render();
+  }else if(G.phase==='peg'&&G.turn===0){
+    const pl=G.peg[0].filter(c=>G.count+val(c)<=31);
+    if(!pl.length)return;
+    const c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:'hard',unseen:unseenFor(0),oppLeft:G.peg[1].length,myHand:G.peg[0],det:true});
+    const p=pegPoints([...G.pile,c],G.count+val(c)).pts;
+    G.hint=new Set([G.peg[0].indexOf(c)]);
+    status(`Hint: play the ${fmt(c)}${p?` (scores ${p})`:' — the safest play'}`);
+    render();
+  }
+}
+
+/* ---------- player input ---------- */
 function humanDiscard(){
   return new Promise(res=>{
-    G.onCard=i=>{if(G.sel.has(i))G.sel.delete(i);else if(G.sel.size<2)G.sel.add(i);render()};
-    G.onBtn=()=>{if(G.sel.size===2){G.onCard=G.onBtn=null;res([...G.sel])}};
+    G.onCard=i=>{G.hint=null;if(G.sel.has(i))G.sel.delete(i);else if(G.sel.size<2)G.sel.add(i);render()};
+    G.onBtn=()=>{if(G.sel.size===2){G.onCard=G.onBtn=null;G.hint=null;res([...G.sel])}};
   });
 }
 function humanPlay(){
   return new Promise(res=>{
-    G.onCard=i=>{const c=G.peg[0][i];if(c&&G.count+val(c)<=31){G.onCard=null;res(c)}};
+    G.onCard=i=>{const c=G.peg[0][i];if(c&&G.count+val(c)<=31){G.onCard=null;G.hint=null;res(c)}};
   });
 }
-function showPanel(title,hand,starter,r,isCrib){
+// A few seconds in which the discard can still be taken back. Resolves true to carry on, false to undo.
+function undoWindow(){
+  return new Promise(res=>{
+    G.undoN=settings.fast?2:3;G.onCard=null;
+    const done=v=>{clearInterval(undoTimer);G.onBtn=null;res(v)};
+    G.onBtn=()=>done(false);
+    undoTimer=setInterval(()=>{G.undoN--;if(G.undoN<=0)done(true);else render()},1000);
+    render();
+  });
+}
+function showPanel(title,hand,starter,r){
   return new Promise(res=>{
     const items=r.items.length?r.items.map(i=>`<li><span>${i.t}</span><b>${i.p}</b></li>`).join(''):'<li><span>Nothing — 0 points</span><b>0</b></li>';
     $('panel').innerHTML=`<h2>${title}</h2>
       <div class="cards">${hand.map(c=>cardEl(c)).join('')}<span class="sep"></span>${cardEl(starter)}</div>
       <ul>${items}</ul><div class="tot">Total: ${r.total}</div>
-      <button id="cont" style="background:var(--gold);color:#222;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;width:100%">Continue</button>`;
+      <button class="gold" id="cont">Continue</button>`;
     $('ov').classList.add('on');
     $('cont').onclick=()=>{$('ov').classList.remove('on');res()};
   });
 }
 
-async function pegging(){
+/* ---------- game flow ---------- */
+async function pegging(A){
   G.peg=[G.hands[0].slice(),G.hands[1].slice()];
-  G.pile=[];G.count=0;G.phase='peg';
+  G.pile=[];G.count=0;G.phase='peg';G.playedAll=[];
   let cur=1-G.dealer,last=null;
   const left=()=>G.peg[0].length+G.peg[1].length;
   const canPlay=p=>G.peg[p].filter(c=>G.count+val(c)<=31);
@@ -285,22 +547,24 @@ async function pegging(){
     const pl=canPlay(cur);
     if(pl.length){
       let c;
-      if(cur===1){status('NPC is thinking…');render();await sleep(900);c=npcPeg(pl,G.pile,G.count)}
-      else{status(`Your play — count is ${G.count}`);render();c=await humanPlay()}
+      if(cur===1){
+        status('NPC is thinking…');render();await A(pause(900));
+        c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:G.level,unseen:unseenFor(1),oppLeft:G.peg[0].length,myHand:G.peg[1]});
+      }else{status(`Your play — count is ${G.count}`);render();c=await A(humanPlay())}
       G.peg[cur]=G.peg[cur].filter(x=>x!==c);
-      G.pile.push(c);G.count+=val(c);
+      G.pile.push(c);G.playedAll.push(c);G.count+=val(c);
       render();
       const r=pegPoints(G.pile,G.count);
       if(r.pts)addScore(cur,r.pts,r.notes.join(', '));
       last=cur;
-      if(G.count===31){await sleep(800);G.pile=[];G.count=0;last=null}
+      if(G.count===31){await A(pause(800));G.pile=[];G.count=0;last=null}
       else if(left()===0){addScore(cur,1,'last card')}
       cur=1-cur;
     }else if(canPlay(1-cur).length){
-      log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();await sleep(900);cur=1-cur;
+      log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();await A(pause(900));cur=1-cur;
     }else{
       if(last!==null)addScore(last,1,'go');
-      await sleep(700);
+      await A(pause(700));
       cur=last!==null?1-last:cur;
       G.pile=[];G.count=0;last=null;render();
     }
@@ -308,63 +572,140 @@ async function pegging(){
   G.turn=null;
 }
 
-async function round(){
+async function round(A){
   const d=shuffle(newDeck());
   const dealer=G.dealer,pone=1-dealer;
   G.hands=[[],[]];
   for(let i=0;i<6;i++){G.hands[pone].push(d.pop());G.hands[dealer].push(d.pop())}
   G.hands.forEach(h=>h.sort(cmp));
-  G.crib=[];G.starter=null;G.pile=[];G.count=0;G.peg=[[],[]];G.sel=new Set();G.turn=null;
+  G.orig=[G.hands[0].slice(),G.hands[1].slice()];
+  G.crib=[];G.starter=null;G.pile=[];G.count=0;G.peg=[[],[]];G.sel=new Set();G.hint=null;G.turn=null;G.playedAll=[];
   G.phase='discard';
   status(`${dealer?'NPC deals':'You deal'} — choose 2 cards for ${dealer?"NPC's":'your'} crib`);
   render();
-  const npcD=npcDiscard(G.hands[1],dealer===1);
-  const idx=await humanDiscard();
+  const npcD=bestDiscard(G.hands[1],dealer===1,G.level).disc;
+  let idx;
+  while(true){
+    idx=await A(humanDiscard());
+    G.phase='confirm';
+    status(`Sending ${idx.map(i=>fmt(G.hands[0][i])).join(' and ')} to ${dealer?"NPC's":'your'} crib…`);
+    if(await A(undoWindow()))break;
+    G.phase='discard';
+    status(`${dealer?'NPC deals':'You deal'} — choose 2 cards for ${dealer?"NPC's":'your'} crib`);
+    render();
+  }
   const mineD=idx.map(i=>G.hands[0][i]);
   G.hands[0]=G.hands[0].filter(c=>!mineD.includes(c));
   G.hands[1]=G.hands[1].filter(c=>!npcD.includes(c));
   G.crib=[...mineD,...npcD];
-  G.phase='cut';status('Cutting the deck…');render();await sleep(900);
+  G.phase='cut';status('Cutting the deck…');render();await A(pause(900));
   G.starter=d.pop();render();
   if(G.starter.r===11){addScore(dealer,2,'his heels (jack starter)')}
-  await sleep(700);
-  await pegging();
+  await A(pause(700));
+  await pegging(A);
   G.phase='show';G.pile=[];G.count=0;render();
   const order=[[pone,G.hands[pone],'hand'],[dealer,G.hands[dealer],'hand'],[dealer,G.crib,'crib']];
   for(const[p,h,kind]of order){
     const r=scoreHand(h,G.starter,kind==='crib');
     const title=kind==='crib'?`${p?"NPC's":'Your'} crib`:`${p?"NPC's":'Your'} hand`;
     status(title);
-    await showPanel(title,h,G.starter,r);
+    if(p===0){recordHand(stats,r.total,kind==='crib');saveStats()}
+    await A(showPanel(title,h,G.starter,r));
     addScore(p,r.total,title);
   }
   G.dealer=1-G.dealer;
 }
 
-function loadRec(){try{return JSON.parse(localStorage.getItem('crib-rec'))||{w:0,l:0}}catch(e){return{w:0,l:0}}}
-function saveRec(r){try{localStorage.setItem('crib-rec',JSON.stringify(r))}catch(e){}}
-
 function gameOver(w){
-  const rec=loadRec();w===0?rec.w++:rec.l++;saveRec(rec);
   const loser=G.scores[1-w];
+  recordGame(stats,{won:w===0,loserScore:loser,level:G.level});saveStats();
   const skunk=loser<91?(loser<61?' — double skunk!':' — skunk!'):'';
   G.phase='over';G.onCard=G.onBtn=null;render();
   $('panel').innerHTML=`<h2>${w===0?'You win! 🎉':'NPC wins'}${skunk}</h2>
     <p>Final score: You ${G.scores[0]} – NPC ${G.scores[1]}</p>
-    <p style="opacity:.8">Record: ${rec.w} wins, ${rec.l} losses</p>
-    <button id="again" style="background:var(--gold);color:#222;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;width:100%">Play again</button>`;
+    <p style="opacity:.8">Record: ${stats.w} wins, ${stats.l} losses</p>
+    <button class="gold" id="again">Play again</button>
+    <button class="opt" id="goStats">View stats</button>`;
   $('ov').classList.add('on');
   $('again').onclick=()=>{$('ov').classList.remove('on');newGame()};
+  $('goStats').onclick=()=>openStats();
 }
 
 async function newGame(){
-  G={scores:[0,0],prev:[0,0],dealer:Math.random()<.5?1:0,log:[],hands:[[],[]],crib:[],peg:[[],[]],pile:[],count:0,starter:null,sel:new Set(),phase:'start'};
+  const gen=++GEN;
+  clearInterval(undoTimer);
+  $('ov').classList.remove('on');
+  // Every await goes through A so a game that was abandoned stops quietly.
+  const A=async p=>{const v=await p;if(gen!==GEN)throw{abort:true};return v};
+  G={scores:[0,0],prev:[0,0],dealer:Math.random()<.5?1:0,log:[],hands:[[],[]],orig:[[],[]],crib:[],peg:[[],[]],pile:[],playedAll:[],count:0,
+     starter:null,sel:new Set(),hint:null,phase:'start',level:settings.level};
   $('log').innerHTML='';
-  try{while(true)await round()}
-  catch(e){if(e&&e.win!==undefined)gameOver(e.win);else{console.error(e);throw e}}
+  initBoard();
+  try{while(true)await round(A)}
+  catch(e){
+    if(e&&e.abort)return;
+    if(e&&e.win!==undefined)gameOver(e.win);
+    else{console.error(e);throw e}
+  }
 }
+
+/* ---------- menu + stats ---------- */
+function closeMenu(){$('ov2').classList.remove('on')}
+function openMenu(){
+  const lv=['easy','normal','hard'];
+  const pending=G&&G.level!==settings.level;
+  $('panel2').innerHTML=`<h2>Menu</h2>
+    <div class="lbl">NPC difficulty${pending?' <small>(applies to the next game)</small>':''}</div>
+    <div class="seg">${lv.map(l=>`<button data-lv="${l}" class="${settings.level===l?'on':''}">${cap(l)}</button>`).join('')}</div>
+    <label class="chk"><input type="checkbox" id="fastChk" ${settings.fast?'checked':''}> Skip animations (faster NPC)</label>
+    <button class="opt" id="mStats">Stats</button>
+    <button class="opt" id="mNew">New game</button>
+    <button class="gold" id="mClose">Close</button>`;
+  $('ov2').classList.add('on');
+  $('panel2').querySelectorAll('[data-lv]').forEach(b=>b.onclick=()=>{settings.level=b.dataset.lv;saveSettings();openMenu()});
+  $('fastChk').onchange=e=>{settings.fast=e.target.checked;saveSettings();applySettings()};
+  $('mStats').onclick=openStats;
+  $('mClose').onclick=closeMenu;
+  let armed=false;
+  $('mNew').onclick=()=>{
+    if(G.phase==='over'||armed){closeMenu();newGame()}
+    else{armed=true;$('mNew').classList.add('warn');$('mNew').textContent='Tap again — this game won’t be counted'}
+  };
+}
+function openStats(){
+  const s=stats,pct=s.games?Math.round(100*s.w/s.games):0;
+  const avg=(sum,n)=>n?(sum/n).toFixed(1):'–';
+  const row=(a,b)=>`<li><span>${a}</span><b>${b}</b></li>`;
+  const diff=['easy','normal','hard'].map(l=>row(cap(l),`${s.byDiff[l].w} – ${s.byDiff[l].l}`)).join('');
+  $('panel2').innerHTML=`<h2>Stats</h2>
+    <ul>
+      ${row('Games played',s.games)}
+      ${row('Won – lost',`${s.w} – ${s.l} (${pct}%)`)}
+      ${row('Current win streak',s.streak)}
+      ${row('Best win streak',s.bestStreak)}
+      ${row('Skunks you dealt',`${s.skunksFor}${s.doubleFor?` (${s.doubleFor} double)`:''}`)}
+      ${row('Skunks you took',`${s.skunksAgainst}${s.doubleAgainst?` (${s.doubleAgainst} double)`:''}`)}
+      ${row('Average hand',avg(s.handSum,s.handN))}
+      ${row('Best hand',s.bestHand)}
+      ${row('Average crib',avg(s.cribSum,s.cribN))}
+      ${row('Best crib',s.bestCrib)}
+    </ul>
+    <div class="lbl">Won – lost by difficulty</div>
+    <ul>${diff}</ul>
+    <button class="gold" id="sBack">Back</button>
+    <button class="opt" id="sReset">Reset stats</button>`;
+  $('ov2').classList.add('on');
+  $('sBack').onclick=openMenu;
+  let armed=false;
+  $('sReset').onclick=()=>{
+    if(armed){stats=emptyStats();saveStats();openStats()}
+    else{armed=true;$('sReset').classList.add('warn');$('sReset').textContent='Tap again to erase all stats'}
+  };
+}
+$('menuBtn').addEventListener('click',openMenu);
+
 /* ---------- updates ---------- */
-// Bump APP_VERSION and version.json together when you release a new version.
+// Do not edit by hand: scripts/release.sh sets APP_VERSION and version.json together.
 const APP_VERSION='1.0.0';
 const VERSION_URL='https://raw.githubusercontent.com/Orangitaz/OrangitazCribbage/main/version.json';
 const RELEASES_URL='https://github.com/Orangitaz/OrangitazCribbage/releases/latest';
@@ -399,6 +740,7 @@ renderVer();
   if(Date.now()-last>24*3600*1000)checkUpdate(false);
 })();
 
+applySettings();
 newGame();
 </script>
 </body>

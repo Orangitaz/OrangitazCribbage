@@ -36,7 +36,7 @@ The `app/` folder is a small WebView wrapper (Kotlin, min Android 8.0). At build
 ### Get an APK from GitHub
 
 - **On demand:** Actions tab, "Build Android APK", "Run workflow". When it finishes, download the `OrangitazCribbage-apk` artifact from the run page (it is a zip containing the APK).
-- **As a release:** run `scripts/release.sh` (below) and push the tag. The workflow builds the APK and attaches it to a GitHub Release, using your release notes as the description.
+- **As a release:** bump the version with `scripts/release.sh` (below) and push. GitHub builds the APK and publishes the release by itself, using your release notes as the description.
 
 The workflow runs the tests first and only builds the APK if they pass.
 
@@ -61,11 +61,17 @@ The repo must be public for the check to work, since the app reads `version.json
 ### Releasing a new version
 
 ```
-scripts/release.sh 1.1.0 "Board view, hints, difficulty levels"
-git push origin main --tags
+scripts/release.sh 1.1.1 "What changed, in a sentence"
+git push origin main
 ```
 
-The script sets the version in `cribbage.html` and `version.json` together, writes your notes into `version.json`, runs the tests, then commits and tags `v1.1.0`. Pushing the tag builds the APK and publishes the GitHub Release. The workflow refuses to build a tagged release if the tag, `cribbage.html` and `version.json` disagree. Only `https://github.com/` links are accepted for the update URL.
+The script sets the version in `cribbage.html` and `version.json` together, writes your notes into `version.json`, runs the tests and commits. After the push, the "Build Android APK" workflow does the rest:
+
+- **Automatically:** it checks every 6 hours. If the version has no GitHub Release yet, it runs the tests, builds the signed APK and publishes the release, with the APK attached as `OrangitazCribbage-<version>.apk` and as `OrangitazCribbage.apk` (a permanent link: `https://github.com/Orangitaz/OrangitazCribbage/releases/latest/download/OrangitazCribbage.apk`).
+- **Right away:** Actions tab, "Build Android APK", "Run workflow", tick **publish**. Running it without the tick only builds a downloadable APK and publishes nothing.
+- **By tag:** pushing a tag like `v1.1.1`, or publishing a release in the browser, also works; the build attaches the APK to it.
+
+A release is never published if the version in `cribbage.html` and `version.json` disagree, or if a tag doesn't match them. Only `https://github.com/` links are accepted for the update URL. GitHub pauses scheduled workflows after 60 days with no activity in the repo; running the workflow once by hand wakes it up again.
 
 ## Tests
 

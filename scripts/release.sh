@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Cut a release: sets the version and release notes in cribbage.html and version.json together,
-# runs the tests, commits and tags. Pushing the tag builds the APK and publishes the GitHub Release.
+# Prepare a release: sets the version and release notes in cribbage.html and version.json together,
+# runs the tests and commits. After you push, GitHub builds the APK and publishes the release by itself
+# (within 6 hours, or straight away via Actions > Build Android APK > Run workflow, tick "publish").
 #
 #   scripts/release.sh 1.1.0 "Board view, hints, difficulty levels"
-#   git push origin main --tags
+#   git push origin main
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
@@ -19,8 +20,8 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "You have uncommitted changes. Commit or stash them first." >&2
   exit 1
 fi
-if git rev-parse -q --verify "refs/tags/v$VER" >/dev/null; then
-  echo "Tag v$VER already exists." >&2
+if git ls-remote --exit-code --tags origin "refs/tags/v$VER" >/dev/null 2>&1; then
+  echo "Release v$VER already exists on GitHub. Pick a new version number." >&2
   exit 1
 fi
 
@@ -44,7 +45,8 @@ node --test tests/cribbage.test.js
 
 git add cribbage.html version.json
 git commit -m "Release v$VER"
-git tag "v$VER"
 echo
-echo "Release v$VER is committed and tagged. Publish it with:"
-echo "  git push origin main --tags"
+echo "Release v$VER is committed. Publish it with:"
+echo "  git push origin main"
+echo "GitHub then builds the APK and publishes the release within 6 hours,"
+echo "or right away if you run the workflow by hand and tick \"publish\"."

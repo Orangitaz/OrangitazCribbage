@@ -1,17 +1,81 @@
 name: Build Android APK
 
+# How a release gets published:
+#  - Every 6 hours (schedule): if the version in cribbage.html has no GitHub Release yet, build and publish it.
+#  - By hand (Actions > Build Android APK > Run workflow): builds the APK as a download. Tick "publish" to also
+#    publish it as a GitHub Release right away.
+#  - Pushing a tag like v1.2.0 also publishes (or attaches the APK to a release you made in the browser).
 on:
-  # Build and attach an APK to a GitHub Release by pushing a tag like v1.0.1
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Also publish it as a GitHub Release (attaches to the release if one exists)"
+        type: boolean
+        default: false
   push:
     tags: ['v*']
-  # Or build on demand from the Actions tab; the APK is saved as a run artifact
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.p.outputs.version }}
+      build: ${{ steps.p.outputs.build }}
+      publish: ${{ steps.p.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Decide what to do
+        id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PUBLISH_INPUT: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          HTML_VER=$(grep -oP "const APP_VERSION='\K[^']+" cribbage.html)
+          JSON_VER=$(python3 -c "import json;print(json.load(open('version.json'))['version'])")
+          VER="$HTML_VER"
+
+          exists=false
+          if gh release view "v$VER" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exists=true; fi
+
+          publish=false
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then publish=true
+          elif [ "$EVENT" = "schedule" ] && [ "$exists" = "false" ]; then publish=true
+          elif [ "$EVENT" = "workflow_dispatch" ] && [ "$PUBLISH_INPUT" = "true" ]; then publish=true
+          fi
+
+          build=true
+          if [ "$EVENT" = "schedule" ] && [ "$exists" = "true" ]; then
+            build=false
+            echo "Version $VER is already published - nothing to do."
+          fi
+
+          if [ "$build" = "true" ] && [ "$publish" = "true" ]; then
+            if [ "$HTML_VER" != "$JSON_VER" ]; then
+              echo "::error::Version mismatch: APP_VERSION in cribbage.html is $HTML_VER but version.json says $JSON_VER."
+              exit 1
+            fi
+            if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$VER" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match the app version $VER."
+              exit 1
+            fi
+          fi
+
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "Version $VER: build=$build publish=$publish (release exists: $exists)"
+
   test:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,24 +86,11 @@ jobs:
         run: node --test tests/cribbage.test.js
 
   build:
-    needs: test
+    needs: [plan, test]
+    if: needs.plan.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      - name: Work out the version
-        id: ver
-        run: |
-          HTML_VER=$(grep -oP "const APP_VERSION='\K[^']+" cribbage.html)
-          JSON_VER=$(python3 -c "import json;print(json.load(open('version.json'))['version'])")
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAG_VER="${GITHUB_REF_NAME#v}"
-            if [[ "$TAG_VER" != "$HTML_VER" || "$TAG_VER" != "$JSON_VER" ]]; then
-              echo "::error::Version mismatch: tag=$TAG_VER, APP_VERSION in cribbage.html=$HTML_VER, version.json=$JSON_VER. Make all three match before tagging."
-              exit 1
-            fi
-          fi
-          echo "name=$HTML_VER" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v5
         with:
@@ -68,26 +119,38 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: >
           gradle assembleRelease --no-daemon
-          -PappVersion=${{ steps.ver.outputs.name }}
+          -PappVersion=${{ needs.plan.outputs.version }}
           -PappVersionCode=${{ github.run_number }}
 
       - name: Name the APK
         run: |
           mkdir dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/OrangitazCribbage-${{ steps.ver.outputs.name }}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "dist/OrangitazCribbage-${{ needs.plan.outputs.version }}.apk"
 
       - uses: actions/upload-artifact@v6
         with:
           name: OrangitazCribbage-apk
           path: dist/*.apk
 
-      - name: Write release notes from version.json
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: python3 -c "import json;print(json.load(open('version.json'))['notes'])" > RELEASE_NOTES.md
-
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.apk
-          body_path: RELEASE_NOTES.md
+      - name: Publish the release
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ needs.plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 -c "import json;print(json.load(open('version.json'))['notes'])" > RELEASE_NOTES.md
+          APK="dist/OrangitazCribbage-$VER.apk"
+          cp "$APK" dist/OrangitazCribbage.apk      # permanent name: releases/latest/download/OrangitazCribbage.apk
+          if gh release view "v$VER" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # a release already exists (for example made in the browser): attach the APKs to it
+            gh release upload "v$VER" "$APK" dist/OrangitazCribbage.apk --clobber -R "$GITHUB_REPOSITORY"
+            if [ -z "$(gh release view "v$VER" -R "$GITHUB_REPOSITORY" --json body -q .body)" ]; then
+              gh release edit "v$VER" --notes-file RELEASE_NOTES.md -R "$GITHUB_REPOSITORY"
+            fi
+          else
+            gh release create "v$VER" "$APK" dist/OrangitazCribbage.apk \
+              --title "Cribbage $VER" --notes-file RELEASE_NOTES.md \
+              --target "$GITHUB_SHA" --latest -R "$GITHUB_REPOSITORY"
+          fi
+          echo "Published v$VER"

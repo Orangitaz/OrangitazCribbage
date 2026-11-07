@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0f4d32">
+<title>Cribbage</title>
+<style>
+:root{--felt:#0f4d32;--felt2:#0b3a26;--card:#fffdf6;--red:#c62828;--gold:#e8c35a;--ink:#16221b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{margin:0;height:100%;background:var(--felt2);color:#f3efe0;font-family:system-ui,-apple-system,Roboto,sans-serif}
+#app{max-width:520px;margin:0 auto;height:100%;display:flex;flex-direction:column;padding:8px 10px;gap:8px;background:radial-gradient(ellipse at 50% 30%,var(--felt),var(--felt2))}
+/* board */
+#board{background:#6b4423;border-radius:10px;padding:8px 10px;box-shadow:inset 0 0 0 2px #3d2512}
+.lane{display:flex;align-items:center;gap:8px;margin:4px 0}
+.lane .nm{width:42px;font-size:12px;font-weight:700}
+.lane .sc{width:28px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.track{position:relative;flex:1;height:16px;border-radius:8px;background:#2f1b0c;
+ background-image:repeating-linear-gradient(90deg,transparent 0,transparent calc(100%/24.2 - 2px),#6b4a2c calc(100%/24.2 - 2px),#6b4a2c calc(100%/24.2))}
+.track .skunk{position:absolute;left:75.2%;top:0;bottom:0;width:2px;background:#c9a15c}
+.peg{position:absolute;top:50%;width:12px;height:12px;border-radius:50%;transform:translate(-50%,-50%);transition:left .5s}
+.peg.f{box-shadow:0 0 0 2px #fff6}
+.p0 .peg{background:#4fc3f7}.p1 .peg{background:#ff8a65}
+.peg.b{opacity:.55;width:9px;height:9px}
+/* table */
+#table{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between;gap:6px}
+.row{display:flex;align-items:center;justify-content:center;gap:4px;min-height:60px}
+.badge{font-size:11px;background:#0006;border-radius:10px;padding:2px 8px;margin:0 4px}
+.badge.d{background:var(--gold);color:#222;font-weight:700}
+#mid{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:92px}
+.slot{width:70px;text-align:center;font-size:11px;opacity:.9}
+#pilewrap{flex:1;text-align:center}
+#pile{display:flex;justify-content:center;min-height:62px}
+#pile .card{margin-left:-18px}#pile .card:first-child{margin-left:0}
+#count{font-size:22px;font-weight:800;color:var(--gold)}
+/* cards */
+.card{position:relative;width:clamp(40px,13vw,62px);aspect-ratio:5/7;background:var(--card);border-radius:7px;color:var(--ink);
+ box-shadow:0 1px 3px #0008;display:flex;flex-direction:column;justify-content:space-between;padding:3px 4px;font-weight:700;font-size:clamp(13px,4vw,18px);line-height:1}
+.card.red{color:var(--red)}
+.card .s{align-self:center;font-size:1.7em}
+.card .r2{align-self:flex-end;transform:rotate(180deg)}
+.card.back{background:repeating-linear-gradient(45deg,#2b4f9e,#2b4f9e 5px,#1e3a78 5px,#1e3a78 10px);border:2px solid #fffdf6}
+.card.sm{width:42px;font-size:13px}
+#mine .card{transition:transform .12s,opacity .12s}
+#mine .card.sel{transform:translateY(-14px);box-shadow:0 0 0 3px var(--gold),0 3px 6px #000a}
+#mine .card.dim{opacity:.4}
+#mine .card.ok{box-shadow:0 0 0 2px #8fd18f,0 1px 3px #0008}
+#mine{display:flex;justify-content:center;gap:clamp(2px,1vw,6px);min-height:90px;align-items:flex-end;padding-top:14px}
+#msg{text-align:center;min-height:36px;font-size:15px;display:flex;align-items:center;justify-content:center}
+#btn{background:var(--gold);color:#222;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;width:100%}
+#btn:disabled{opacity:.35}
+#btn.hide{visibility:hidden}
+#log{font-size:12px;opacity:.85;height:50px;overflow:hidden;text-align:center;line-height:1.35}
+#log div:last-child{color:var(--gold)}
+/* overlay */
+#ov{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:14px;z-index:5}
+#ov.on{display:flex}
+.panel{background:var(--felt);border:2px solid var(--gold);border-radius:14px;padding:14px;width:100%;max-width:440px}
+.panel h2{margin:0 0 8px;font-size:17px;color:var(--gold)}
+.panel .cards{display:flex;justify-content:center;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.panel .cards .sep{width:10px}
+.panel ul{list-style:none;margin:0 0 8px;padding:0;font-size:14px}
+.panel li{display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #fff2}
+.panel .tot{font-size:20px;font-weight:800;text-align:right;margin-bottom:10px}
+.panel p{margin:4px 0 10px;text-align:center}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="board"></div>
+  <div id="table">
+    <div class="row" id="npc"></div>
+    <div id="mid">
+      <div class="slot" id="starter"></div>
+      <div id="pilewrap"><div id="pile"></div><div id="count"></div></div>
+      <div class="slot" id="cribinfo"></div>
+    </div>
+  </div>
+  <div id="msg"></div>
+  <div id="mine"></div>
+  <button id="btn" class="hide"></button>
+  <div id="log"></div>
+</div>
+<div id="ov"><div class="panel" id="panel"></div></div>
+
+<script>
+// ==LOGIC==
+const SUITS=['♠','♥','♦','♣'];
+const RANKS=['','A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const val=c=>Math.min(c.r,10);
+const key=c=>c.r+'-'+c.s;
+const cmp=(a,b)=>a.r-b.r||a.s-b.s;
+function newDeck(){const d=[];for(let s=0;s<4;s++)for(let r=1;r<=13;r++)d.push({r,s});return d}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function scoreHand(hand,starter,isCrib){
+  const all=[...hand,starter],items=[];let total=0;
+  // fifteens
+  let f=0;
+  for(let m=1;m<32;m++){let s=0;for(let i=0;i<5;i++)if(m&(1<<i))s+=val(all[i]);if(s===15)f++}
+  if(f){items.push({t:`${f} fifteen${f>1?'s':''}`,p:2*f});total+=2*f}
+  // pairs
+  let pr=0;
+  for(let i=0;i<5;i++)for(let j=i+1;j<5;j++)if(all[i].r===all[j].r)pr++;
+  if(pr){items.push({t:`${pr} pair${pr>1?'s':''}`,p:2*pr});total+=2*pr}
+  // runs
+  const cnt=new Array(15).fill(0);all.forEach(c=>cnt[c.r]++);
+  for(let len=5;len>=3;len--){
+    let sum=0,n=0;
+    for(let st=1;st+len-1<=13;st++){
+      let prod=1;for(let k=st;k<st+len;k++)prod*=cnt[k];
+      if(prod>0){sum+=prod;n++}
+    }
+    if(n){const p=len*sum;items.push({t:sum>1?`${sum} runs of ${len}`:`Run of ${len}`,p});total+=p;break}
+  }
+  // flush
+  const hs=hand.every(c=>c.s===hand[0].s);
+  if(hs){
+    if(starter.s===hand[0].s){items.push({t:'Flush of 5',p:5});total+=5}
+    else if(!isCrib){items.push({t:'Flush of 4',p:4});total+=4}
+  }
+  // nobs
+  if(hand.some(c=>c.r===11&&c.s===starter.s)){items.push({t:'Nobs (jack of starter suit)',p:1});total+=1}
+  return{total,items};
+}
+
+function pegPoints(pile,count){
+  let pts=0;const notes=[];
+  if(count===15){pts+=2;notes.push('15')}
+  if(count===31){pts+=2;notes.push('31')}
+  const last=pile[pile.length-1];let n=1;
+  for(let i=pile.length-2;i>=0&&pile[i].r===last.r;i--)n++;
+  if(n>=2){const p=[0,0,2,6,12][n];pts+=p;notes.push(['','','pair','pair royal','double pair royal'][n])}
+  for(let len=pile.length;len>=3;len--){
+    const seg=pile.slice(-len).map(c=>c.r).sort((a,b)=>a-b);
+    let ok=true;for(let i=1;i<len;i++)if(seg[i]!==seg[i-1]+1){ok=false;break}
+    if(ok){pts+=len;notes.push('run of '+len);break}
+  }
+  return{pts,notes};
+}
+
+function cribVal(d){
+  const[a,b]=d;let v=0;
+  if(a.r===b.r)v+=2;
+  if(val(a)+val(b)===15)v+=2;
+  const g=Math.abs(a.r-b.r);if(g===1)v+=0.7;else if(g===2)v+=0.4;
+  if(a.s===b.s)v+=0.2;
+  if(a.r===5||b.r===5)v+=0.5;
+  return v;
+}
+function npcDiscard(hand,isDealer){
+  const known=new Set(hand.map(key));
+  const unseen=newDeck().filter(c=>!known.has(key(c)));
+  let best=null,bs=-1e9;
+  for(let i=0;i<6;i++)for(let j=i+1;j<6;j++){
+    const keep=hand.filter((_,k)=>k!==i&&k!==j),disc=[hand[i],hand[j]];
+    let t=0;for(const s of unseen)t+=scoreHand(keep,s,false).total;
+    const sc=t/unseen.length+(isDealer?1:-1)*cribVal(disc)+Math.random()*0.05;
+    if(sc>bs){bs=sc;best=disc}
+  }
+  return best;
+}
+function npcPeg(playable,pile,count){
+  let best=null,bs=-1e9;
+  for(const c of playable){
+    const np=[...pile,c],cnt=count+val(c);
+    let s=pegPoints(np,cnt).pts*10;
+    if(cnt===5||cnt===21)s-=4;else if(cnt===10)s-=2;
+    if(pile.length===0){s-=val(c)*0.3;if(c.r===5)s-=3}
+    s+=Math.random()*0.5;
+    if(s>bs){bs=s;best=c}
+  }
+  return best;
+}
+// ==END LOGIC==
+
+/* ---------- UI + game flow ---------- */
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+let G=null;
+const who=p=>p?'NPC':'You';
+
+function cardEl(c,cls=''){
+  const red=c.s===1||c.s===2?' red':'';
+  return `<div class="card${red} ${cls}"><span>${RANKS[c.r]}</span><span class="s">${SUITS[c.s]}</span><span class="r2">${RANKS[c.r]}</span></div>`;
+}
+function backEl(cls=''){return `<div class="card back ${cls}"></div>`}
+
+function status(t){$('msg').textContent=t}
+function log(t){G.log.push(t);if(G.log.length>3)G.log.shift();$('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('')}
+
+function renderBoard(){
+  const lane=(p)=>{
+    const pct=v=>Math.min(100,v/121*100);
+    return `<div class="lane p${p}"><span class="nm">${p?'NPC':'You'}</span>
+      <div class="track"><span class="skunk"></span>
+      <span class="peg b" style="left:${pct(G.prev[p])}%"></span>
+      <span class="peg f" style="left:${pct(G.scores[p])}%"></span></div>
+      <span class="sc">${G.scores[p]}</span></div>`;
+  };
+  $('board').innerHTML=lane(1)+lane(0);
+}
+
+function render(){
+  renderBoard();
+  const dealerBadge=p=>G.dealer===p?'<span class="badge d">Dealer</span>':'';
+  // NPC row
+  const n=G.phase==='peg'?G.peg[1].length:(G.phase==='discard'?6:0);
+  $('npc').innerHTML=(n?Array.from({length:n},()=>backEl()).join(''):'<span style="opacity:.6;font-size:13px">NPC</span>')+dealerBadge(1);
+  // mid
+  $('starter').innerHTML=G.starter?`<div style="margin-bottom:2px">Starter</div>${cardEl(G.starter)}`:'';
+  $('cribinfo').innerHTML=`Crib<br><b>${G.crib.length}</b> cards<br>${G.dealer===0?'yours':"NPC's"}`;
+  $('pile').innerHTML=G.pile.map(c=>cardEl(c)).join('');
+  $('count').textContent=G.phase==='peg'?`Count: ${G.count}`:'';
+  // mine
+  const mine=$('mine');
+  if(G.phase==='discard'){
+    mine.innerHTML=G.hands[0].map((c,i)=>cardEl(c,G.sel.has(i)?'sel':'').replace('<div class="card','<div data-i="'+i+'" class="card')).join('');
+  }else if(G.phase==='peg'){
+    mine.innerHTML=G.peg[0].map((c,i)=>{
+      const ok=G.count+val(c)<=31&&G.turn===0;
+      return cardEl(c,ok?'ok':'dim').replace('<div class="card','<div data-i="'+i+'" class="card');
+    }).join('');
+  }else mine.innerHTML='';
+  // button
+  const b=$('btn');
+  if(G.phase==='discard'){b.className='';b.textContent='Send to crib';b.disabled=G.sel.size!==2}
+  else b.className='hide';
+}
+
+$('mine').addEventListener('click',e=>{
+  const el=e.target.closest('.card');if(!el||!G||!G.onCard)return;
+  G.onCard(+el.dataset.i);
+});
+$('btn').addEventListener('click',()=>{if(G&&G.onBtn)G.onBtn()});
+
+function addScore(p,pts,why){
+  if(!pts)return;
+  G.prev[p]=G.scores[p];G.scores[p]=Math.min(121,G.scores[p]+pts);
+  log(`${who(p)} +${pts} — ${why}`);
+  renderBoard();
+  if(G.scores[p]>=121)throw{win:p};
+}
+
+function humanDiscard(){
+  return new Promise(res=>{
+    G.onCard=i=>{if(G.sel.has(i))G.sel.delete(i);else if(G.sel.size<2)G.sel.add(i);render()};
+    G.onBtn=()=>{if(G.sel.size===2){G.onCard=G.onBtn=null;res([...G.sel])}};
+  });
+}
+function humanPlay(){
+  return new Promise(res=>{
+    G.onCard=i=>{const c=G.peg[0][i];if(c&&G.count+val(c)<=31){G.onCard=null;res(c)}};
+  });
+}
+function showPanel(title,hand,starter,r,isCrib){
+  return new Promise(res=>{
+    const items=r.items.length?r.items.map(i=>`<li><span>${i.t}</span><b>${i.p}</b></li>`).join(''):'<li><span>Nothing — 0 points</span><b>0</b></li>';
+    $('panel').innerHTML=`<h2>${title}</h2>
+      <div class="cards">${hand.map(c=>cardEl(c)).join('')}<span class="sep"></span>${cardEl(starter)}</div>
+      <ul>${items}</ul><div class="tot">Total: ${r.total}</div>
+      <button id="cont" style="background:var(--gold);color:#222;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;width:100%">Continue</button>`;
+    $('ov').classList.add('on');
+    $('cont').onclick=()=>{$('ov').classList.remove('on');res()};
+  });
+}
+
+async function pegging(){
+  G.peg=[G.hands[0].slice(),G.hands[1].slice()];
+  G.pile=[];G.count=0;G.phase='peg';
+  let cur=1-G.dealer,last=null;
+  const left=()=>G.peg[0].length+G.peg[1].length;
+  const canPlay=p=>G.peg[p].filter(c=>G.count+val(c)<=31);
+  while(left()>0){
+    G.turn=cur;
+    const pl=canPlay(cur);
+    if(pl.length){
+      let c;
+      if(cur===1){status('NPC is thinking…');render();await sleep(900);c=npcPeg(pl,G.pile,G.count)}
+      else{status(`Your play — count is ${G.count}`);render();c=await humanPlay()}
+      G.peg[cur]=G.peg[cur].filter(x=>x!==c);
+      G.pile.push(c);G.count+=val(c);
+      render();
+      const r=pegPoints(G.pile,G.count);
+      if(r.pts)addScore(cur,r.pts,r.notes.join(', '));
+      last=cur;
+      if(G.count===31){await sleep(800);G.pile=[];G.count=0;last=null}
+      else if(left()===0){addScore(cur,1,'last card')}
+      cur=1-cur;
+    }else if(canPlay(1-cur).length){
+      log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();await sleep(900);cur=1-cur;
+    }else{
+      if(last!==null)addScore(last,1,'go');
+      await sleep(700);
+      cur=last!==null?1-last:cur;
+      G.pile=[];G.count=0;last=null;render();
+    }
+  }
+  G.turn=null;
+}
+
+async function round(){
+  const d=shuffle(newDeck());
+  const dealer=G.dealer,pone=1-dealer;
+  G.hands=[[],[]];
+  for(let i=0;i<6;i++){G.hands[pone].push(d.pop());G.hands[dealer].push(d.pop())}
+  G.hands.forEach(h=>h.sort(cmp));
+  G.crib=[];G.starter=null;G.pile=[];G.count=0;G.peg=[[],[]];G.sel=new Set();G.turn=null;
+  G.phase='discard';
+  status(`${dealer?'NPC deals':'You deal'} — choose 2 cards for ${dealer?"NPC's":'your'} crib`);
+  render();
+  const npcD=npcDiscard(G.hands[1],dealer===1);
+  const idx=await humanDiscard();
+  const mineD=idx.map(i=>G.hands[0][i]);
+  G.hands[0]=G.hands[0].filter(c=>!mineD.includes(c));
+  G.hands[1]=G.hands[1].filter(c=>!npcD.includes(c));
+  G.crib=[...mineD,...npcD];
+  G.phase='cut';status('Cutting the deck…');render();await sleep(900);
+  G.starter=d.pop();render();
+  if(G.starter.r===11){addScore(dealer,2,'his heels (jack starter)')}
+  await sleep(700);
+  await pegging();
+  G.phase='show';G.pile=[];G.count=0;render();
+  const order=[[pone,G.hands[pone],'hand'],[dealer,G.hands[dealer],'hand'],[dealer,G.crib,'crib']];
+  for(const[p,h,kind]of order){
+    const r=scoreHand(h,G.starter,kind==='crib');
+    const title=kind==='crib'?`${p?"NPC's":'Your'} crib`:`${p?"NPC's":'Your'} hand`;
+    status(title);
+    await showPanel(title,h,G.starter,r);
+    addScore(p,r.total,title);
+  }
+  G.dealer=1-G.dealer;
+}
+
+function loadRec(){try{return JSON.parse(localStorage.getItem('crib-rec'))||{w:0,l:0}}catch(e){return{w:0,l:0}}}
+function saveRec(r){try{localStorage.setItem('crib-rec',JSON.stringify(r))}catch(e){}}
+
+function gameOver(w){
+  const rec=loadRec();w===0?rec.w++:rec.l++;saveRec(rec);
+  const loser=G.scores[1-w];
+  const skunk=loser<91?(loser<61?' — double skunk!':' — skunk!'):'';
+  G.phase='over';G.onCard=G.onBtn=null;render();
+  $('panel').innerHTML=`<h2>${w===0?'You win! 🎉':'NPC wins'}${skunk}</h2>
+    <p>Final score: You ${G.scores[0]} – NPC ${G.scores[1]}</p>
+    <p style="opacity:.8">Record: ${rec.w} wins, ${rec.l} losses</p>
+    <button id="again" style="background:var(--gold);color:#222;border:0;border-radius:24px;padding:12px;font-size:16px;font-weight:800;width:100%">Play again</button>`;
+  $('ov').classList.add('on');
+  $('again').onclick=()=>{$('ov').classList.remove('on');newGame()};
+}
+
+async function newGame(){
+  G={scores:[0,0],prev:[0,0],dealer:Math.random()<.5?1:0,log:[],hands:[[],[]],crib:[],peg:[[],[]],pile:[],count:0,starter:null,sel:new Set(),phase:'start'};
+  $('log').innerHTML='';
+  try{while(true)await round()}
+  catch(e){if(e&&e.win!==undefined)gameOver(e.win);else{console.error(e);throw e}}
+}
+newGame();
+</script>
+</body>
+</html>

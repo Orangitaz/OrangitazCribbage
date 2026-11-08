@@ -36,6 +36,10 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 
 Measured over simulated games (200 to 500 per matchup, so treat these as roughly ±4 points): Normal beats Easy about 70% of the time, Hard beats Easy about 77%, and Hard beats Normal about 60%. Cribbage has a lot of luck, so a better NPC still loses often.
 
+## iPhone and other browsers (web version)
+
+Every push to `main` publishes the game to GitHub Pages (workflow "Publish web version"; needs Settings, Pages, Source = GitHub Actions). On an iPhone, open `https://orangitaz.github.io/OrangitazCribbage/` in Safari, tap Share, then **Add to Home Screen**. It then opens full-screen like an app and works offline. It updates itself when you are online. There is no vibration on iPhone, and a game saved in Safari is separate from the home-screen copy, so play from the icon.
+
 ## Android
 
 The `app/` folder is a small WebView wrapper (Kotlin, min Android 8.0). At build time `cribbage.html` is copied in as the app's page, so the game has one source of truth. Links that leave the game, such as the update Download link, open in your browser.

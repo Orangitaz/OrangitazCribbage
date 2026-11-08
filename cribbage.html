@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0f4d32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Cribbage">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
 <title>Cribbage</title>
 <style>
 :root{--felt:#0f4d32;--felt2:#0b3a26;--card:#fffdf6;--red:#c62828;--gold:#e8c35a;--ink:#16221b}
@@ -1058,7 +1063,8 @@ const RELEASES_URL='https://github.com/Orangitaz/OrangitazCribbage/releases/late
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function renderVer(extra){
-  $('ver').innerHTML=`v${APP_VERSION} · ${extra||'<a id="chk">Check for updates</a>'}`;
+  const dflt=typeof isWeb!=='undefined'&&isWeb?'':' · <a id="chk">Check for updates</a>';
+  $('ver').innerHTML=`v${APP_VERSION}${extra?' · '+extra:dflt}`;
   const c=$('chk');if(c)c.onclick=()=>checkUpdate(true);
 }
 const API_URL='https://api.github.com/repos/Orangitaz/OrangitazCribbage/releases/latest';
@@ -1097,8 +1103,12 @@ async function checkUpdate(manual){
     else renderVer();
   }
 }
+// The web version (GitHub Pages) updates itself through its service worker, so there is no APK to offer.
+const isWeb=typeof location!=='undefined'&&/^https?:$/.test(location.protocol)&&!bridge();
+if(isWeb&&typeof navigator!=='undefined'&&navigator.serviceWorker)navigator.serviceWorker.register('sw.js').catch(()=>{});
 renderVer();
 (function autoCheck(){
+  if(isWeb)return;
   let last=0;try{last=+localStorage.getItem('crib-lastcheck')||0}catch(e){}
   if(Date.now()-last>24*3600*1000)checkUpdate(false);
 })();

@@ -458,6 +458,18 @@ test('finished games clear the saved game', async () => {
   assert.equal(g.store.has('crib-save'), false);
 });
 
+test('web version: manifest, icons and service worker exist and the page links them', () => {
+  const root = path.join(__dirname, '..', 'web');
+  const m = JSON.parse(fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8'));
+  assert.equal(m.display, 'standalone');
+  for (const i of m.icons) assert.ok(fs.existsSync(path.join(root, i.src)), i.src);
+  assert.ok(fs.existsSync(path.join(root, 'icon-180.png')));
+  assert.ok(fs.existsSync(path.join(root, 'sw.js')));
+  const html = read();
+  assert.match(html, /rel="manifest" href="manifest\.webmanifest"/);
+  assert.match(html, /rel="apple-touch-icon" href="icon-180\.png"/);
+});
+
 // ---------- release hygiene ----------
 test('APP_VERSION in cribbage.html matches version.json', () => {
   const html = read();

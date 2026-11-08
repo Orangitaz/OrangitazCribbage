@@ -1,5 +1,5 @@
 {
-  "version": "1.2.0",
-  "notes": "Save and resume your game, short game to 61, optional muggins, sounds and score popups, four-colour deck and larger text, hints that explain why, Android back button, new icon",
+  "version": "1.2.1",
+  "notes": "Update check now only offers versions that are published, and Download goes straight to the APK",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

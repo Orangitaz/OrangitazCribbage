@@ -17,7 +17,9 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 - **Three difficulty levels** (Menu): Easy, Normal and Hard; a change applies from the next game
 - **Stats** (Menu): games, win/loss, streaks, skunks, average and best hand and crib, and results per difficulty. Saved on the device and can be reset
 - **Skip animations** (Menu): shortens the NPC's pauses
-- **Save and resume**: the game is saved after every move; if the app is closed or Android stops it, the next launch offers "Resume"
+- **Start screen**: Continue (when a game is saved), New game, Settings and Stats; the in-game menu has "Main screen" to get back to it
+- **Cut for the first deal**: pick a card, the lower card deals
+- **Save and resume**: the game is saved after every move, so if the app is closed or Android stops it, Continue picks up where you left off
 - **Short game** (Menu): play to 61 instead of 121 (skunk line at 31)
 - **Muggins** (Menu, optional): you count your own hand and crib yourself; the NPC takes any points you miss
 - **Hints explain themselves**: the discard hint compares what you keep with what goes to the crib, the pegging hint says why a card is best

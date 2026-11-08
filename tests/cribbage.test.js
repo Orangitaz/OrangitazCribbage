@@ -464,6 +464,20 @@ test('nothing is saved while cutting for the deal, and a save with no dealt hand
   assert.equal(L.unpackGame(empty), null);
   assert.ok(L.unpackGame({ ...empty, hands: [d.slice(0, 6), d.slice(6, 12)], orig: [d.slice(0, 6), d.slice(6, 12)], deck: d.slice(12) }));
 });
+test('start screen: Continue only when a game is saved; settings and stats open without a game', async () => {
+  const g = loadGame();
+  g.run('showHome()');
+  assert.doesNotMatch(g.run("$('panel').innerHTML"), /hCont/);
+  assert.match(g.run("$('panel').innerHTML"), /hNew/);
+  g.run('openMenu();openStats("home")');
+  // save a real game, then the start screen offers it
+  botGame(g, 'normal', 'normal');
+  g.run(`var nsave=0;const os=saveGame;saveGame=()=>{os();if(++nsave===3)throw{abort:true}}`);
+  await g.run('newGame()');
+  g.run('G=null;showHome()');
+  assert.match(g.run("$('panel').innerHTML"), /hCont/);
+  assert.match(g.run("$('panel').innerHTML"), /You \d+ – NPC \d+/);
+});
 test('finished games clear the saved game', async () => {
   const g = loadGame();
   botGame(g, 'normal', 'normal', false);

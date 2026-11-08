@@ -119,6 +119,12 @@ body.large #btnrow button{font-size:18px}
 .cutc:active{transform:translateY(-4px)}
 .cutres{display:flex;justify-content:center;gap:28px;margin:8px 0;text-align:center}
 .cutres .card{margin:4px auto 0}
+#board:empty{display:none}
+.home{text-align:center;margin:6px 0 14px}
+.home .logo{font-size:26px;letter-spacing:6px;color:var(--gold)}
+.home h1{margin:4px 0 0;font-size:34px;letter-spacing:1px}
+.home .tag{font-size:13px;opacity:.75}
+.gold small{display:block;font-size:12px;font-weight:600;opacity:.75;margin-top:2px}
 </style>
 </head>
 <body>
@@ -951,28 +957,44 @@ function cutForDeal(){
     round();
   });
 }
-// On launch: offer to pick up a saved game, otherwise start a new one.
-function start(){
-  applySettings();
+// Start screen: shown on launch and from the in-game menu. Continue is offered when a game is saved.
+function showHome(){
   const saved=loadSave();
-  if(!saved){newGame();return}
-  $('panel').innerHTML=`<h2>Resume your game?</h2>
-    <p>You ${saved.scores[0]} – NPC ${saved.scores[1]}<br><small style="opacity:.75">${cap(saved.level)}${saved.target===61?' · short game':''}${saved.muggins?' · muggins':''}</small></p>
-    <button class="gold" id="resume">Resume</button>
-    <button class="opt" id="fresh">New game</button>`;
+  const sub=saved?`You ${saved.scores[0]} – NPC ${saved.scores[1]} · ${cap(saved.level)}${saved.target===61?' · to 61':''}${saved.muggins?' · muggins':''}`:'';
+  $('panel').innerHTML=`<div class="home"><div class="logo">♠ ♥ ♣ ♦</div><h1>Cribbage</h1><div class="tag">You against the NPC</div></div>
+    ${saved?`<button class="gold" id="hCont">Continue<small>${sub}</small></button>`:''}
+    <button class="${saved?'opt':'gold'}" id="hNew">New game</button>
+    <button class="opt" id="hSet">Settings</button>
+    <button class="opt" id="hStats">Stats</button>`;
   $('ov').classList.add('on');
-  $('resume').onclick=()=>newGame(saved);
-  $('fresh').onclick=()=>{clearSave();newGame()};
+  if(saved)$('hCont').onclick=()=>newGame(saved);
+  let armed=false;
+  $('hNew').onclick=()=>{
+    if(saved&&!armed){armed=true;$('hNew').classList.add('warn');$('hNew').textContent='Tap again — the saved game will be lost';return}
+    newGame();
+  };
+  $('hSet').onclick=openMenu;
+  $('hStats').onclick=()=>openStats('home');
 }
+// Back to the start screen from a game in progress (the game is saved first).
+function goHome(){
+  saveGame();GEN++;clearInterval(undoTimer);leaveOpen=false;
+  G=null;
+  $('ov2').classList.remove('on');
+  $('lvl').textContent='';$('board').innerHTML='';$('npc').innerHTML='';$('mine').innerHTML='';$('pile').innerHTML='';
+  $('starter').innerHTML='';$('cribinfo').innerHTML='';$('count').textContent='';status('');$('log').innerHTML='';
+  $('btn').className='hide';$('btn2').className='alt hide';
+  showHome();
+}
+function start(){applySettings();showHome()}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveGame()});
 
 /* ---------- menu + stats + back button ---------- */
 function closeMenu(){$('ov2').classList.remove('on');leaveOpen=false}
 function openMenu(){
-  if(!G)return;
   leaveOpen=false;
   const lv=['easy','normal','hard'];
-  const pending=G.level!==settings.level||G.target!==settings.target;
+  const pending=!!G&&(G.level!==settings.level||G.target!==settings.target);
   const chk=(id,on,label)=>`<label class="chk"><input type="checkbox" id="${id}" ${on?'checked':''}> ${label}</label>`;
   $('panel2').innerHTML=`<h2>Menu</h2>
     <div class="sect">Game</div>
@@ -990,7 +1012,7 @@ function openMenu(){
     ${chk('fastChk',settings.fast,'Skip animations (faster NPC)')}
     ${bridge()?chk('awakeChk',settings.keepAwake,'Keep the screen on while playing'):''}
     <button class="opt" id="mStats">Stats</button>
-    <button class="opt" id="mNew">New game</button>
+    ${G?'<button class="opt" id="mHome">Main screen (game is saved)</button><button class="opt" id="mNew">New game</button>':''}
     <button class="gold" id="mClose">Close</button>`;
   $('ov2').classList.add('on');
   const P=$('panel2');
@@ -999,15 +1021,16 @@ function openMenu(){
   const bind=(id,key,after)=>{const e=$(id);if(e)e.onchange=ev=>{settings[key]=ev.target.checked;saveSettings();applySettings();if(after)after()}};
   bind('mugChk','muggins',()=>{if(G)G.muggins=settings.muggins;if(G&&G.phase!=='start')render()});
   bind('fourChk','fourColor');bind('largeChk','large');bind('soundChk','sound');bind('hapChk','haptics');bind('fastChk','fast');bind('awakeChk','keepAwake');
-  $('mStats').onclick=openStats;
+  $('mStats').onclick=()=>openStats();
   $('mClose').onclick=closeMenu;
+  if(G)$('mHome').onclick=goHome;
   let armed=false;
-  $('mNew').onclick=()=>{
+  if(G)$('mNew').onclick=()=>{
     if(G.phase==='over'||armed){closeMenu();newGame()}
     else{armed=true;$('mNew').classList.add('warn');$('mNew').textContent='Tap again — this game won’t be counted'}
   };
 }
-function openStats(){
+function openStats(from){
   leaveOpen=false;
   const s=stats,pct=s.games?Math.round(100*s.w/s.games):0;
   const avg=(sum,n)=>n?(sum/n).toFixed(1):'–';
@@ -1031,10 +1054,10 @@ function openStats(){
     <button class="gold" id="sBack">Back</button>
     <button class="opt" id="sReset">Reset stats</button>`;
   $('ov2').classList.add('on');
-  $('sBack').onclick=openMenu;
+  $('sBack').onclick=from==='home'?closeMenu:openMenu;
   let armed=false;
   $('sReset').onclick=()=>{
-    if(armed){stats=emptyStats();saveStats();openStats()}
+    if(armed){stats=emptyStats();saveStats();openStats(from)}
     else{armed=true;$('sReset').classList.add('warn');$('sReset').textContent='Tap again to erase all stats'}
   };
 }

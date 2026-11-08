@@ -1,6 +1,6 @@
 # OrangitazCribbage
 
-Play cribbage against a computer opponent (NPC). Standard two-player rules, first to 121. Runs in any browser and builds as an Android app.
+Play cribbage against a computer opponent (NPC). Standard two-player rules, first to 121 (or 61 for a short game). Runs in any browser and builds as an Android app.
 
 ## Play it
 
@@ -11,12 +11,19 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 - Deal 6, discard 2 to the crib, cut the starter (his heels scores 2 for the dealer)
 - Pegging: 15, 31, pairs, runs, go and last card
 - The show: hand then crib, with a point-by-point breakdown (fifteens, pairs, runs, flush, nobs)
-- A cribbage board with two lanes per player (out and back), a front and a back peg each, and the skunk line at 91
+- A cribbage board with two lanes per player (out and back), a front and a back peg each, and the skunk lines
 - **Hint button** (blue glow): suggests the best discard, and the best card to play while pegging
 - **Undo**: after you send two cards to the crib you have a few seconds to take them back
 - **Three difficulty levels** (Menu): Easy, Normal and Hard; a change applies from the next game
 - **Stats** (Menu): games, win/loss, streaks, skunks, average and best hand and crib, and results per difficulty. Saved on the device and can be reset
 - **Skip animations** (Menu): shortens the NPC's pauses
+- **Save and resume**: the game is saved after every move; if the app is closed or Android stops it, the next launch offers "Resume"
+- **Short game** (Menu): play to 61 instead of 121 (skunk line at 31)
+- **Muggins** (Menu, optional): you count your own hand and crib yourself; the NPC takes any points you miss
+- **Hints explain themselves**: the discard hint compares what you keep with what goes to the crib, the pegging hint says why a card is best
+- **Sounds, vibration and score popups** (all switchable): points pop up on the table when someone scores
+- **Easier to read**: a four-colour deck (clubs green, diamonds blue) and a larger cards and text option
+- **Android**: the back button asks before leaving (the game is saved), and the screen can be kept on while you play
 - In-app update check (see Updates)
 
 ## The NPC

@@ -5,6 +5,10 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -14,6 +18,32 @@ import androidx.webkit.WebViewAssetLoader
 class MainActivity : Activity() {
 
     private lateinit var web: WebView
+
+    // Small bridge the game page can call (window.AndroidBridge). Calls arrive on a background thread.
+    private inner class Bridge {
+        @JavascriptInterface
+        fun vibrate(ms: Int) {
+            try {
+                val v = getSystemService(VIBRATOR_SERVICE) as Vibrator
+                v.vibrate(VibrationEffect.createOneShot(ms.toLong().coerceIn(1, 500), VibrationEffect.DEFAULT_AMPLITUDE))
+            } catch (e: Exception) {
+                // No vibrator or no permission: ignore.
+            }
+        }
+
+        @JavascriptInterface
+        fun setKeepScreenOn(on: Boolean) {
+            runOnUiThread {
+                if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+
+        @JavascriptInterface
+        fun exitApp() {
+            runOnUiThread { finish() }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,6 +58,7 @@ class MainActivity : Activity() {
         web.setBackgroundColor(Color.parseColor("#0B3A26"))
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true
+        web.addJavascriptInterface(Bridge(), "AndroidBridge")
         web.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView,
@@ -53,6 +84,14 @@ class MainActivity : Activity() {
         }
         setContentView(web)
         web.loadUrl("https://${WebViewAssetLoader.DEFAULT_DOMAIN}/assets/index.html")
+    }
+
+    // Back: the game decides (close the menu, ask before leaving, or exit). The game is saved as it goes.
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        web.evaluateJavascript("(window.cribBack?window.cribBack():'exit')") { result ->
+            if (result == null || result.contains("exit")) finish()
+        }
     }
 
     override fun onDestroy() {

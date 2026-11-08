@@ -309,6 +309,129 @@ test('stats are recorded by the game and old 1.0 records are migrated', async ()
   assert.ok(g.store.has('crib-stats'));
 });
 
+
+// ---------- version 1.2 features ----------
+test('skunk lines: full game (91 / 61) and short game (31)', () => {
+  assert.deepEqual([90, 91, 60, 61, 0].map(x => L.skunkKind(x, 121)), ['skunk', null, 'double', 'skunk', 'double']);
+  assert.deepEqual([30, 31, 0].map(x => L.skunkKind(x, 61)), ['skunk', null, 'skunk']);
+});
+test('muggins: what you claim is what you score, the NPC takes the difference', () => {
+  assert.deepEqual(L.resolveClaim(8, 12), { me: 8, npc: 4, over: false });
+  assert.deepEqual(L.resolveClaim(12, 12), { me: 12, npc: 0, over: false });
+  assert.deepEqual(L.resolveClaim(14, 12), { me: 12, npc: 0, over: true });
+  assert.deepEqual(L.resolveClaim(0, 0), { me: 0, npc: 0, over: false });
+});
+test('short game: board cells and stats use the 61 target', () => {
+  assert.equal(L.pegCell(61, 61).home, true);
+  assert.equal(L.pegCell(60, 61).home, undefined);
+  assert.equal(L.pegCell(61, 121).home, undefined);
+  const st = L.emptyStats();
+  L.recordGame(st, { won: true, loserScore: 20, level: 'normal', target: 61 });
+  L.recordGame(st, { won: false, loserScore: 45, level: 'normal', target: 61 });
+  assert.equal(st.skunksFor, 1);
+  assert.equal(st.skunksAgainst, 0);
+  assert.equal(st.doubleFor, 0);
+});
+test('hint explanations: ranked plays are best-first and the text mentions the points', () => {
+  const o = { playable: [C(5, 0), C(10, 1)], pile: [C(10, 2)], count: 10, level: 'hard', det: true,
+    myHand: [C(5, 0), C(10, 1), C(2, 3)], unseen: L.newDeck().filter(c => !(c.r === 5 && c.s === 0)).slice(0, 30), oppLeft: 3 };
+  const rk = L.rankPlays(o);
+  assert.equal(rk.length, 2);
+  assert.ok(rk[0].v >= rk[1].v);
+  assert.match(L.explainPlay(rk, o.pile, o.count), /scores/);
+  const h = L.bestDiscard([C(5, 0), C(5, 1), C(5, 2), C(11, 3), C(13, 1), C(2, 0)], true, 'hard');
+  assert.equal(h.disc.length, 2);
+  assert.ok(L.explainDiscard(h, true).length > 10);
+});
+test('saved games: round trip, and junk is rejected', () => {
+  const g = loadGame();
+  g.run(`botSetup=1`);
+  const d = L.newDeck();
+  const base = { scores: [10, 20], prev: [5, 12], dealer: 1, level: 'hard', target: 61, muggins: true,
+    hands: [d.slice(0, 4), d.slice(4, 8)], orig: [d.slice(0, 6), d.slice(6, 12)], crib: d.slice(12, 14), starter: d[14],
+    deck: d.slice(20), peg: [d.slice(0, 2), d.slice(4, 6)], pile: [d[30]], playedAll: [d[30]], count: 10, stage: 'peg',
+    showIdx: 0, pcur: 1, plast: 0, pegInit: true, log: ['a', 'b'] };
+  const back = L.unpackGame(JSON.parse(JSON.stringify(L.packGame(base))));
+  assert.deepEqual(back.scores, [10, 20]);
+  assert.equal(back.target, 61);
+  assert.equal(back.stage, 'peg');
+  assert.equal(back.hands[0].length, 4);
+  for (const bad of [null, 5, 'x', {}, { ...L.packGame(base), stage: 'nope' }, { ...L.packGame(base), target: 99 },
+    { ...L.packGame(base), scores: [1] }, { ...L.packGame(base), hands: 'junk' }]) {
+    assert.equal(L.unpackGame(bad), null);
+  }
+});
+test('sound and vibration never throw when the browser has no audio or vibration', () => {
+  const g = loadGame();
+  g.run(`for(const k of ['play','go','score','npcscore','win','lose'])sfx(k,9);buzz(50);settings.sound=false;sfx('win');settings.haptics=false;buzz(10)`);
+});
+test('short game (to 61) runs to completion and never exceeds 61', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run('settings.target=61');
+  for (let i = 0; i < 10; i++) await g.run('newGame()');
+  const res = g.run('results');
+  assert.equal(res.length, 10);
+  for (const r of res) { assert.equal(Math.max(...r.s), 61); assert.ok(Math.min(...r.s) < 61); }
+});
+test('muggins game: missed points go to the NPC and games still finish', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`settings.muggins=true;var mug=0,askN=0;
+    askCount=async(t,h,s)=>{askN++;const a=scoreHand(h,s,t.includes('crib')).total;return Math.max(0,a-(askN%3===0?2:0))};
+    const oa=addScore;addScore=(p,pts,why)=>{if(why==='muggins')mug++;return oa(p,pts,why)};`);
+  for (let i = 0; i < 8; i++) await g.run('newGame()');
+  assert.equal(g.run('results.length'), 8);
+  assert.ok(g.run('askN') > 10, 'the player was asked to count');
+  assert.ok(g.run('mug') > 0, 'the NPC caught missed points');
+});
+test('resume: a game stopped at any saved point can be restored and finished', async () => {
+  for (const stopAt of [1, 2, 5, 9, 14, 25, 40, 70]) {
+    const g1 = loadGame();
+    botGame(g1, 'normal', 'normal');
+    g1.run(`var nsave=0;const os=saveGame;saveGame=()=>{os();if(++nsave===${stopAt})throw{abort:true}}`);
+    await g1.run('newGame()');
+    const saved = g1.store.get('crib-save');
+    assert.ok(saved, `a save exists at checkpoint ${stopAt}`);
+    const g2 = loadGame();
+    botGame(g2, 'normal', 'normal');
+    g2.store.set('crib-save', saved);
+    assert.ok(g2.run('loadSave()'), 'the save loads');
+    await g2.run('newGame(loadSave())');
+    const res = g2.run('results');
+    assert.equal(res.length, 1, `game resumed from checkpoint ${stopAt} finished`);
+    assert.equal(Math.max(...res[0].s), 121);
+  }
+});
+test('resume: saving at every pause (as when the app is backgrounded) always gives a state that can be finished', async () => {
+  const g1 = loadGame();
+  botGame(g1, 'normal', 'normal');
+  g1.run(`var snaps=[];sleep=ms=>{saveGame();const s=localStorage.getItem('crib-save');if(s)snaps.push(s);return Promise.resolve()}`);
+  await g1.run('newGame()');
+  const snaps = g1.run('snaps');
+  assert.ok(snaps.length > 50);
+  let n = 0;
+  for (let i = 0; i < snaps.length; i += 5) {
+    const o = JSON.parse(snaps[i]);
+    if (o.stage === 'discard') assert.ok(o.hands.every(h => h.length === 6), 'discard-stage saves still hold full hands');
+    const g2 = loadGame();
+    botGame(g2, 'normal', 'normal');
+    g2.store.set('crib-save', snaps[i]);
+    await g2.run('newGame(loadSave())');
+    const res = g2.run('results');
+    assert.equal(res.length, 1, `snapshot ${i} finished`);
+    assert.equal(Math.max(...res[0].s), 121);
+    n++;
+  }
+  assert.ok(n > 10);
+});
+test('finished games clear the saved game', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal', false);
+  await g.run('newGame()');
+  assert.equal(g.store.has('crib-save'), false);
+});
+
 // ---------- release hygiene ----------
 test('APP_VERSION in cribbage.html matches version.json', () => {
   const html = read();

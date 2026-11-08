@@ -86,6 +86,29 @@ body.fast .pegc{transition-duration:.12s}
 .opt{background:#0008;color:var(--gold);border:1px solid var(--gold)}
 .opt.warn{background:#7a1f1f;color:#fff;border-color:#c66}
 .sub{font-size:12px;opacity:.75;margin-top:8px;text-align:center}
+.sect{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--gold);margin:14px 0 2px;opacity:.9;border-top:1px solid #fff2;padding-top:8px}
+.sect:first-of-type{border-top:0;margin-top:4px}
+.stepper{display:flex;align-items:center;justify-content:center;gap:8px;margin:6px 0 4px}
+.stepper button{min-width:46px;padding:12px 6px;border-radius:12px;border:1px solid var(--gold);background:#0006;color:#f3efe0;font-size:16px;font-weight:700}
+.stepper b{min-width:56px;text-align:center;font-size:34px;color:var(--gold)}
+.panel p.mug{color:#ff9d9d;font-weight:700}
+/* score popup */
+#table{position:relative}
+#pop{position:absolute;left:0;right:0;top:34%;display:flex;justify-content:center;pointer-events:none;z-index:2}
+#pop .pop{background:#000c;border:2px solid var(--gold);color:var(--gold);padding:6px 14px;border-radius:18px;font-weight:800;font-size:18px;animation:popup 1.6s ease-out forwards}
+#pop .pop.p1{border-color:#ff4d6d;color:#ffb3c0}
+body.fast #pop .pop{animation-duration:.8s}
+@keyframes popup{0%{opacity:0;transform:translateY(10px) scale(.7)}12%{opacity:1;transform:translateY(0) scale(1.08)}22%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:translateY(-18px)}}
+/* display options */
+body.fourc .card.s0{color:var(--ink)}
+body.fourc .card.s1{color:var(--red)}
+body.fourc .card.s2{color:#1565c0}
+body.fourc .card.s3{color:#2e7d32}
+body.large .card{width:clamp(46px,14.4vw,72px);font-size:clamp(15px,4.8vw,22px)}
+body.large #mine{gap:clamp(1px,.4vw,3px)}
+body.large #msg{font-size:17px}
+body.large #log{font-size:14px;height:42px}
+body.large #btnrow button{font-size:18px}
 </style>
 </head>
 <body>
@@ -93,6 +116,7 @@ body.fast .pegc{transition-duration:.12s}
   <div id="top"><span class="chip" id="lvl"></span><button id="menuBtn">☰ Menu</button></div>
   <div id="board"></div>
   <div id="table">
+    <div id="pop"></div>
     <div class="row" id="npc"></div>
     <div id="mid">
       <div class="slot" id="starter"></div>
@@ -197,11 +221,12 @@ function bestDiscard(hand,isDealer,level){
   const known=new Set(hand.map(key));
   const unseen=newDeck().filter(c=>!known.has(key(c)));
   const samples=level==='hard'?makeSamples(unseen.length,150):null;
-  let best=null;
+  let best=null,maxKeepAvg=0;
   for(let i=0;i<6;i++)for(let j=i+1;j<6;j++){
     const keep=hand.filter((_,k)=>k!==i&&k!==j),disc=[hand[i],hand[j]];
     let t=0;for(const s of unseen)t+=scoreHand(keep,s,false).total;
     const keepAvg=t/unseen.length;
+    if(keepAvg>maxKeepAvg)maxKeepAvg=keepAvg;
     let cribV=0;
     if(level==='hard')cribV=cribAvg(disc,unseen,samples);
     else if(level==='normal')cribV=cribVal(disc);
@@ -210,6 +235,7 @@ function bestDiscard(hand,isDealer,level){
     else if(level==='normal')score+=Math.random()*0.05;
     if(!best||score>best.score)best={disc,keep,keepAvg,cribV,score};
   }
+  best.maxKeepAvg=maxKeepAvg;
   return best;
 }
 // Chance the opponent, holding m random cards from the unseen pool, holds at least one of n "bad" cards.
@@ -255,6 +281,27 @@ function pegSim(pile,count,h0,h1,turn,last){
   }
   return diff;
 }
+// Look ahead: guess the opponent's cards from what we have not seen, play out the rest of the round for each
+// candidate card, and rank the candidates by average point difference (ours minus theirs). Every candidate
+// faces the same guesses. Returns [{c,v}] best first, or null when there is nothing to look ahead at.
+function rankPlays(o){
+  const{playable,pile,count}=o,unseen=o.unseen||[],oppLeft=o.oppLeft||0;
+  if(!(o.myHand&&unseen.length>=oppLeft&&oppLeft>0&&playable.length>1))return null;
+  const N=o.samples||60,tot=playable.map(()=>0);
+  for(let k=0;k<N;k++){
+    const pool=unseen.slice(),opp=[];
+    for(let i=0;i<oppLeft;i++)opp.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
+    playable.forEach((c,i)=>{
+      const np=[...pile,c],cnt=count+val(c),rest=o.myHand.filter(x=>x!==c);
+      let d=pegPoints(np,cnt).pts;
+      if(cnt===31)d+=pegSim([],0,rest,opp,1,null);
+      else if(rest.length+opp.length===0)d+=1;
+      else d+=pegSim(np,cnt,rest,opp,1,0);
+      tot[i]+=d;
+    });
+  }
+  return playable.map((c,i)=>({c,v:tot[i]/N+(o.det?0:Math.random()*0.01)})).sort((a,b)=>b.v-a.v);
+}
 // Choose a card to play while pegging.
 // o: {playable, pile, count, level, unseen, oppLeft, myHand, det, samples}
 //  unseen = cards we have not seen; oppLeft = cards the opponent still holds;
@@ -268,26 +315,7 @@ function choosePlay(o){
     if(bp>0&&Math.random()<0.65)return best;
     return playable[Math.floor(Math.random()*playable.length)];
   }
-  if(level==='hard'&&o.myHand&&unseen.length>=oppLeft&&oppLeft>0&&playable.length>1){
-    // Look ahead: guess the opponent's cards from what we have not seen, play out the round for each
-    // candidate, and keep the one with the best average point difference. Every candidate faces the same guesses.
-    const N=o.samples||60,tot=playable.map(()=>0);
-    for(let k=0;k<N;k++){
-      const pool=unseen.slice(),opp=[];
-      for(let i=0;i<oppLeft;i++)opp.push(pool.splice(Math.floor(Math.random()*pool.length),1)[0]);
-      playable.forEach((c,i)=>{
-        const np=[...pile,c],cnt=count+val(c),rest=o.myHand.filter(x=>x!==c);
-        let d=pegPoints(np,cnt).pts;
-        if(cnt===31)d+=pegSim([],0,rest,opp,1,null);
-        else if(rest.length+opp.length===0)d+=1;
-        else d+=pegSim(np,cnt,rest,opp,1,0);
-        tot[i]+=d;
-      });
-    }
-    let bi=0,bv=-1e9;
-    tot.forEach((t,i)=>{const v=t/N+(o.det?0:Math.random()*0.01);if(v>bv){bv=v;bi=i}});
-    return playable[bi];
-  }
+  if(level==='hard'){const rk=rankPlays(o);if(rk)return rk[0].c}
   let best=null,bs=-1e9;
   for(const c of playable){
     const np=[...pile,c],cnt=count+val(c);
@@ -316,6 +344,48 @@ function choosePlay(o){
     if(s>bs){bs=s;best=c}
   }
   return best;
+}
+
+// ---- plain-language reasons shown with hints ----
+const cs=c=>RANKS[c.r]+SUITS[c.s];
+function explainDiscard(res,isDealer){
+  const keep=res.keep.map(cs).join(' ');
+  let t=`Keep ${keep}: about ${res.keepAvg.toFixed(1)} points in your hand.`;
+  if(res.maxKeepAvg-res.keepAvg>0.25){
+    t+=isDealer
+      ?` Another pair would keep ${res.maxKeepAvg.toFixed(1)}, but these two do more for your crib (about ${res.cribV.toFixed(1)} points).`
+      :` Another pair would keep ${res.maxKeepAvg.toFixed(1)}, but these two give the NPC's crib less (about ${res.cribV.toFixed(1)} points).`;
+  }else{
+    t+=isDealer
+      ?` They should also add about ${res.cribV.toFixed(1)} points to your crib.`
+      :` They should give the NPC's crib only about ${res.cribV.toFixed(1)} points.`;
+  }
+  return t;
+}
+function explainPlay(ranked,pile,count){
+  if(!ranked||!ranked.length)return '';
+  const c=ranked[0].c,r=pegPoints([...pile,c],count+val(c));
+  let t=r.pts?`it scores ${r.pts} (${r.notes.join(', ')}).`:'it scores nothing yet but sets you up best.';
+  if(ranked.length>1){
+    const f=v=>(v>=0?'+':'')+v.toFixed(1);
+    t+=` Looking ahead at likely replies it nets about ${f(ranked[0].v)} points, against ${f(ranked[1].v)} for the next best.`;
+  }
+  return t;
+}
+
+// ---- rule options ----
+// Skunk lines: a full game (121) has a skunk below 91 and a double skunk below 61; a short game (61) has a skunk below 31.
+function skunkKind(loserScore,target){
+  if(target===61)return loserScore<31?'skunk':null;
+  if(loserScore<61)return 'double';
+  if(loserScore<91)return 'skunk';
+  return null;
+}
+// Muggins: you count your own hand aloud. Claiming too little lets the NPC take the points you missed;
+// claiming too much just scores what the hand is really worth.
+function resolveClaim(claim,actual){
+  if(claim>=actual)return{me:actual,npc:0,over:claim>actual};
+  return{me:claim,npc:actual-claim,over:false};
 }
 
 function cmpVer(a,b){
@@ -352,20 +422,55 @@ function recordGame(st,g){
   const d=st.byDiff[g.level]||(st.byDiff[g.level]={w:0,l:0});
   if(g.won){
     st.w++;d.w++;st.streak++;st.bestStreak=Math.max(st.bestStreak,st.streak);
-    if(g.loserScore<91)st.skunksFor++;
-    if(g.loserScore<61)st.doubleFor++;
+    const k=skunkKind(g.loserScore,g.target||121);
+    if(k)st.skunksFor++;
+    if(k==='double')st.doubleFor++;
   }else{
     st.l++;d.l++;st.streak=0;
-    if(g.loserScore<91)st.skunksAgainst++;
-    if(g.loserScore<61)st.doubleAgainst++;
+    const k=skunkKind(g.loserScore,g.target||121);
+    if(k)st.skunksAgainst++;
+    if(k==='double')st.doubleAgainst++;
   }
 }
 // Where a score sits on the board: four bands of 30 holes (1-30, 31-60, 61-90, 91-120),
 // plus a start spot (0) and a home spot (121).
-function pegCell(score){
+function pegCell(score,target=121){
   if(score<=0)return{start:true};
-  if(score>=121)return{home:true};
+  if(score>=target)return{home:true};
   return{band:Math.floor((score-1)/30),col:(score-1)%30};
+}
+// ---- saved game ----
+const SAVE_KEYS=['scores','prev','dealer','level','target','muggins','hands','orig','crib','starter','deck','peg','pile',
+  'playedAll','count','stage','showIdx','pcur','plast','pegInit','log'];
+const isCard=c=>!!c&&Number.isInteger(c.r)&&c.r>=1&&c.r<=13&&Number.isInteger(c.s)&&c.s>=0&&c.s<=3;
+const isCards=a=>Array.isArray(a)&&a.length<=52&&a.every(isCard);
+function packGame(g){
+  const o={v:1};
+  for(const k of SAVE_KEYS)o[k]=g[k];
+  return JSON.parse(JSON.stringify(o));
+}
+// Returns a clean copy of a saved game, or null if it is not usable.
+function unpackGame(o){
+  try{
+    if(!o||o.v!==1)return null;
+    const two=a=>Array.isArray(a)&&a.length===2;
+    if(!two(o.scores)||!two(o.prev)||!o.scores.every(Number.isFinite)||!o.prev.every(Number.isFinite))return null;
+    if(o.dealer!==0&&o.dealer!==1)return null;
+    if(!['easy','normal','hard'].includes(o.level)||(o.target!==121&&o.target!==61))return null;
+    if(!['discard','peg','show','next'].includes(o.stage))return null;
+    if(!two(o.hands)||!o.hands.every(isCards)||!two(o.orig)||!o.orig.every(isCards)||!two(o.peg)||!o.peg.every(isCards))return null;
+    if(!isCards(o.crib)||!isCards(o.deck)||!isCards(o.pile)||!isCards(o.playedAll))return null;
+    if(o.starter!==null&&!isCard(o.starter))return null;
+    if(!Number.isInteger(o.count)||o.count<0||o.count>31||!Number.isInteger(o.showIdx)||o.showIdx<0||o.showIdx>3)return null;
+    if(o.pcur!==0&&o.pcur!==1)return null;
+    if(o.plast!==null&&o.plast!==0&&o.plast!==1)return null;
+    if(o.stage==='peg'&&o.pegInit&&!o.starter)return null;
+    if(Math.max(...o.scores)>=o.target)return null;
+    const c=JSON.parse(JSON.stringify(o));
+    c.muggins=!!o.muggins;c.pegInit=!!o.pegInit;
+    c.log=Array.isArray(o.log)?o.log.filter(x=>typeof x==='string').slice(-2):[];
+    return c;
+  }catch(e){return null}
 }
 // ==END LOGIC==
 
@@ -373,20 +478,31 @@ function pegCell(score){
 const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
-const fmt=c=>RANKS[c.r]+SUITS[c.s];
+const fmt=cs;
 const who=p=>p?'NPC':'You';
-let G=null,GEN=0,undoTimer=null;
+let G=null,GEN=0,undoTimer=null,leaveOpen=false;
+// The Android app injects AndroidBridge (vibration, keep-screen-on, exit); in a browser it does not exist.
+const bridge=()=>typeof AndroidBridge!=='undefined'?AndroidBridge:null;
 
 /* settings + stats storage */
+const DEFAULTS={level:'normal',target:121,muggins:false,fast:false,sound:true,haptics:true,keepAwake:true,fourColor:false,large:false};
 function loadSettings(){
+  const d={...DEFAULTS};
   try{
-    const s=JSON.parse(localStorage.getItem('crib-settings'));
-    return{level:['easy','normal','hard'].includes(s&&s.level)?s.level:'normal',fast:!!(s&&s.fast)};
-  }catch(e){return{level:'normal',fast:false}}
+    const s=JSON.parse(localStorage.getItem('crib-settings'))||{};
+    if(['easy','normal','hard'].includes(s.level))d.level=s.level;
+    if(s.target===61||s.target===121)d.target=s.target;
+    for(const k of['muggins','fast','sound','haptics','keepAwake','fourColor','large'])if(typeof s[k]==='boolean')d[k]=s[k];
+  }catch(e){}
+  return d;
 }
 let settings=loadSettings();
 function saveSettings(){try{localStorage.setItem('crib-settings',JSON.stringify(settings))}catch(e){}}
-function applySettings(){document.body.classList.toggle('fast',!!settings.fast)}
+function applySettings(){
+  const c=document.body.classList;
+  c.toggle('fast',!!settings.fast);c.toggle('fourc',!!settings.fourColor);c.toggle('large',!!settings.large);
+  const b=bridge();if(b&&b.setKeepScreenOn){try{b.setKeepScreenOn(!!settings.keepAwake)}catch(e){}}
+}
 const pause=ms=>sleep(settings.fast?Math.min(ms,120):ms);
 
 function loadStats(){
@@ -401,35 +517,82 @@ function loadStats(){
 let stats=loadStats();
 function saveStats(){try{localStorage.setItem('crib-stats',JSON.stringify(stats))}catch(e){}}
 
+/* saved game: checkpoints are written as play goes on, so a closed or killed app can pick up where it left off */
+function saveGame(){if(!G||G.phase==='over'||G.noSave)return;try{localStorage.setItem('crib-save',JSON.stringify(packGame(G)))}catch(e){}}
+function clearSave(){try{localStorage.removeItem('crib-save')}catch(e){}}
+function loadSave(){try{const raw=localStorage.getItem('crib-save');return raw?unpackGame(JSON.parse(raw)):null}catch(e){return null}}
+
+/* sound and vibration (tones are generated, there are no audio files) */
+let actx=null;
+function audio(){
+  try{
+    if(!settings.sound)return null;
+    const AC=typeof AudioContext!=='undefined'?AudioContext:(typeof webkitAudioContext!=='undefined'?webkitAudioContext:null);
+    if(!AC)return null;
+    if(!actx)actx=new AC();
+    if(actx.state==='suspended')actx.resume();
+    return actx;
+  }catch(e){return null}
+}
+function tone(freq,dur,when=0,type='sine',vol=0.12){
+  try{
+    const a=audio();if(!a)return;
+    const t=a.currentTime+when,o=a.createOscillator(),g=a.createGain();
+    o.type=type;o.frequency.value=freq;
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g);g.connect(a.destination);o.start(t);o.stop(t+dur+0.03);
+  }catch(e){}
+}
+function sfx(kind,n){
+  if(kind==='play')tone(380,0.05,0,'triangle',0.09);
+  else if(kind==='go')tone(200,0.16,0,'sine',0.1);
+  else if(kind==='score'){
+    const base=n>=8?392:(n>=4?440:523);
+    tone(base,0.12);tone(base*1.25,0.12,0.09);if(n>=4)tone(base*1.5,0.18,0.18);if(n>=8)tone(base*2,0.25,0.3);
+  }else if(kind==='npcscore')tone(300,0.1,0,'sine',0.07);
+  else if(kind==='win'){[523,659,784,1046].forEach((f,i)=>tone(f,0.22,i*0.14,'triangle',0.14))}
+  else if(kind==='lose'){[392,330,262].forEach((f,i)=>tone(f,0.28,i*0.2,'sine',0.1))}
+}
+function buzz(ms){
+  if(!settings.haptics)return;
+  try{
+    const b=bridge();
+    if(b&&b.vibrate)b.vibrate(ms);
+    else if(typeof navigator!=='undefined'&&navigator.vibrate)navigator.vibrate(ms);
+  }catch(e){}
+}
+
 /* cards */
 function cardEl(c,cls='',i=null){
   const red=c.s===1||c.s===2?' red':'';
-  return `<div${i===null?'':` data-i="${i}"`} class="card${red} ${cls}"><span>${RANKS[c.r]}</span><span class="s">${SUITS[c.s]}</span><span class="r2">${RANKS[c.r]}</span></div>`;
+  return `<div${i===null?'':` data-i="${i}"`} class="card${red} s${c.s} ${cls}"><span>${RANKS[c.r]}</span><span class="s">${SUITS[c.s]}</span><span class="r2">${RANKS[c.r]}</span></div>`;
 }
 const backEl=()=>'<div class="card back"></div>';
 
 function status(t){$('msg').textContent=t}
 function log(t){G.log.push(t);if(G.log.length>2)G.log.shift();$('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('')}
+function popup(p,pts,why){const e=$('pop');if(e)e.innerHTML=`<span class="pop p${p}">${who(p)} +${pts}${why?` · ${esc(why)}`:''}</span>`}
 
 /* ---------- board ---------- */
-// Four bands, read left to right like text. Each band has an NPC lane (top) and a player lane (bottom).
+// Bands of 30 holes, read left to right like text. Each band has an NPC lane (top) and a player lane (bottom).
+// A full game (to 121) uses four bands, a short game (to 61) uses two.
 const BX0=24,PITCH=10,GAP=5,BAND_H=40,TOP=4;
 const holeX=c=>BX0+c*PITCH+Math.floor(c/5)*GAP;
 const LANE_Y={1:11,0:29};                 // offset inside a band: NPC lane, player lane
 const START_X=9,HOME_X=BX0+29*PITCH+5*GAP+16;
 const PCOL={0:'#4fc3f7',1:'#ff4d6d'};
+const bandsFor=t=>t===61?2:4;
 function pegPos(p,score){
-  const c=pegCell(score);
+  const c=pegCell(score,G.target);
   if(c.start)return{x:START_X,y:TOP+LANE_Y[p]};
-  if(c.home)return{x:HOME_X,y:TOP+3*BAND_H+LANE_Y[p]};
+  if(c.home)return{x:HOME_X,y:TOP+(bandsFor(G.target)-1)*BAND_H+LANE_Y[p]};
   return{x:holeX(c.col),y:TOP+c.band*BAND_H+LANE_Y[p]};
 }
 function initBoard(){
-  const W=360,H=TOP*2+4*BAND_H;
+  const T=G.target,NB=bandsFor(T),W=360,H=TOP*2+NB*BAND_H;
   let h=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cribbage board"><rect width="${W}" height="${H}" rx="8" fill="#8a5a2e"/>`;
-  for(let b=0;b<4;b++){
+  for(let b=0;b<NB;b++){
     const y0=TOP+b*BAND_H;
-    // lane backgrounds
     for(const p of[1,0]){
       h+=`<rect x="${BX0-9}" y="${y0+LANE_Y[p]-8}" width="${holeX(29)-BX0+18}" height="16" rx="8" fill="${PCOL[p]}" opacity=".24"/>`;
       for(let c=0;c<30;c++)h+=`<circle cx="${holeX(c)}" cy="${y0+LANE_Y[p]}" r="3" fill="#2a1608"/>`;
@@ -439,25 +602,26 @@ function initBoard(){
       const col=g*5+4,sc=b*30+col+1;
       h+=`<text x="${holeX(col)}" y="${y0+(LANE_Y[1]+LANE_Y[0])/2+3.2}" text-anchor="middle" font-size="9" font-weight="700" opacity="${sc%10===0?1:.7}">${sc}</text>`;
     }
-    // dashed markers: double skunk line at 61, skunk line at 91
-    if(b===2||b===3){
-      const x=BX0-10,color=b===3?'#e8c35a':'#e0805f';
-      h+=`<line x1="${x}" x2="${x}" y1="${y0+1}" y2="${y0+BAND_H-5}" stroke="${color}" stroke-width="1.6" stroke-dasharray="3 2"/>`;
-      h+=`<text x="${x+3}" y="${y0+5.5}" font-size="6" style="fill:${color}">${b===3?'91 skunk line':'61 double skunk line'}</text>`;
+    // dashed markers: skunk lines
+    const mark=T===121?(b===2?['#e0805f','61 double skunk line']:b===3?['#e8c35a','91 skunk line']:null):(b===1?['#e8c35a','31 skunk line']:null);
+    if(mark){
+      const x=BX0-10;
+      h+=`<line x1="${x}" x2="${x}" y1="${y0+1}" y2="${y0+BAND_H-5}" stroke="${mark[0]}" stroke-width="1.6" stroke-dasharray="3 2"/>`;
+      h+=`<text x="${x+3}" y="${y0+5.5}" font-size="6" style="fill:${mark[0]}">${mark[1]}</text>`;
     }
   }
-  // start and home holes
+  const homeY=TOP+(NB-1)*BAND_H;
   for(const p of[1,0]){
     h+=`<circle cx="${START_X}" cy="${TOP+LANE_Y[p]}" r="3.6" fill="#2a1608"/>`;
-    h+=`<circle cx="${HOME_X}" cy="${TOP+3*BAND_H+LANE_Y[p]}" r="4.4" fill="#2a1608" stroke="#e8c35a" stroke-width="1"/>`;
+    h+=`<circle cx="${HOME_X}" cy="${homeY+LANE_Y[p]}" r="4.4" fill="#2a1608" stroke="#e8c35a" stroke-width="1"/>`;
   }
-  h+=`<text x="${HOME_X}" y="${TOP+3*BAND_H+(LANE_Y[1]+LANE_Y[0])/2+3}" text-anchor="middle" font-size="7" font-weight="700" style="fill:#e8c35a">121</text>`;
+  h+=`<text x="${HOME_X}" y="${homeY+(LANE_Y[1]+LANE_Y[0])/2+3}" text-anchor="middle" font-size="7" font-weight="700" style="fill:#e8c35a">${T}</text>`;
   // Front peg: big with a thick white ring. Back peg: smaller, same colour, solid, with a thin white ring.
   for(const p of[1,0])for(const k of['b','f'])
     h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?5:3.6}" fill="${PCOL[p]}" stroke="#fff" stroke-width="${k==='f'?1.8:1.1}" style="transform:translate(${START_X}px,${TOP+LANE_Y[p]}px)"/>`;
   $('board').innerHTML=`<div id="scorebar">
       <span class="sc"><span class="dot" style="background:${PCOL[1]}"></span>NPC <b id="sc1">0</b></span>
-      <span class="sc"><small>first to 121</small></span>
+      <span class="sc"><small>first to ${T}</small></span>
       <span class="sc"><span class="dot" style="background:${PCOL[0]}"></span>You <b id="sc0">0</b></span>
     </div>`+h+'</svg>';
 }
@@ -474,7 +638,7 @@ function renderBoard(){
 
 /* ---------- main render ---------- */
 function render(){
-  $('lvl').textContent=`NPC: ${cap(G.level)}`;
+  $('lvl').textContent=`NPC: ${cap(G.level)}${G.target===61?' · to 61':''}${G.muggins?' · muggins':''}`;
   renderBoard();
   const dealerBadge=p=>G.dealer===p?'<span class="badge d">Dealer</span>':'';
   const n=G.phase==='peg'?G.peg[1].length:((G.phase==='discard'||G.phase==='confirm')?6:0);
@@ -508,10 +672,11 @@ $('btn2').addEventListener('click',()=>{if(G)showHint()});
 
 function addScore(p,pts,why){
   if(!pts)return;
-  G.prev[p]=G.scores[p];G.scores[p]=Math.min(121,G.scores[p]+pts);
+  G.prev[p]=G.scores[p];G.scores[p]=Math.min(G.target,G.scores[p]+pts);
   log(`${who(p)} +${pts} — ${why}`);
-  renderBoard();
-  if(G.scores[p]>=121)throw{win:p};
+  renderBoard();popup(p,pts,why);
+  if(p===0){sfx('score',pts);buzz(Math.min(25+pts*8,110))}else sfx('npcscore');
+  if(G.scores[p]>=G.target)throw{win:p};
 }
 
 /* ---------- hints ---------- */
@@ -523,15 +688,17 @@ function showHint(){
   if(G.phase==='discard'){
     const h=bestDiscard(G.hands[0],G.dealer===0,'hard');
     G.hint=new Set(h.disc.map(c=>G.hands[0].indexOf(c)));
-    status(`Hint: send ${fmt(h.disc[0])} and ${fmt(h.disc[1])} — your hand then averages about ${h.keepAvg.toFixed(1)} points`);
+    status(`Hint: send ${fmt(h.disc[0])} and ${fmt(h.disc[1])}. ${explainDiscard(h,G.dealer===0)}`);
     render();
   }else if(G.phase==='peg'&&G.turn===0){
     const pl=G.peg[0].filter(c=>G.count+val(c)<=31);
     if(!pl.length)return;
-    const c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:'hard',unseen:unseenFor(0),oppLeft:G.peg[1].length,myHand:G.peg[0],det:true});
+    const o={playable:pl,pile:G.pile,count:G.count,level:'hard',unseen:unseenFor(0),oppLeft:G.peg[1].length,myHand:G.peg[0],det:true};
+    const rk=rankPlays(o),c=rk?rk[0].c:choosePlay(o);
     const p=pegPoints([...G.pile,c],G.count+val(c)).pts;
     G.hint=new Set([G.peg[0].indexOf(c)]);
-    status(`Hint: play the ${fmt(c)}${p?` (scores ${p})`:' — the safest play'}`);
+    const why=rk?explainPlay(rk,G.pile,G.count):(pl.length===1?'it is your only playable card.':(p?`it scores ${p}.`:'it is the safest play.'));
+    status(`Hint: play the ${fmt(c)} — ${why}`);
     render();
   }
 }
@@ -558,26 +725,56 @@ function undoWindow(){
     render();
   });
 }
-function showPanel(title,hand,starter,r){
+function showPanel(title,hand,starter,r,claim){
   return new Promise(res=>{
     const items=r.items.length?r.items.map(i=>`<li><span>${i.t}</span><b>${i.p}</b></li>`).join(''):'<li><span>Nothing — 0 points</span><b>0</b></li>';
+    let note='';
+    if(claim!==null&&claim!==undefined){
+      const o=resolveClaim(claim,r.total);
+      note=o.npc?`<p class="mug">You counted ${claim}, but it is worth ${r.total}. Muggins! The NPC takes ${o.npc}.</p>`
+        :o.over?`<p>You counted ${claim}, but it is only worth ${r.total}, so you score ${r.total}.</p>`
+        :`<p>Spot on: ${r.total}!</p>`;
+    }
     $('panel').innerHTML=`<h2>${title}</h2>
       <div class="cards">${hand.map(c=>cardEl(c)).join('')}<span class="sep"></span>${cardEl(starter)}</div>
-      <ul>${items}</ul><div class="tot">Total: ${r.total}</div>
+      <ul>${items}</ul><div class="tot">Total: ${r.total}</div>${note}
       <button class="gold" id="cont">Continue</button>`;
     $('ov').classList.add('on');
     $('cont').onclick=()=>{$('ov').classList.remove('on');res()};
   });
 }
+// Muggins: you count your own hand before it is scored. 19 cannot be scored, so the stepper skips it.
+function askCount(title,hand,starter){
+  return new Promise(res=>{
+    let n=0;
+    $('panel').innerHTML=`<h2>${title}: count it yourself</h2>
+      <div class="cards">${hand.map(c=>cardEl(c)).join('')}<span class="sep"></span>${cardEl(starter)}</div>
+      <div class="stepper"><button data-d="-5">−5</button><button data-d="-1">−1</button><b id="cnt">0</b><button data-d="1">+1</button><button data-d="5">+5</button></div>
+      <p class="sub">Count carefully: the NPC takes any points you miss.</p>
+      <button class="gold" id="cntOk">Score it</button>`;
+    $('ov').classList.add('on');
+    $('panel').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{
+      const d=+b.dataset.d;
+      let m=Math.max(0,Math.min(29,n+d));
+      if(m===19)m+=d>0?1:-1;
+      n=m;$('cnt').textContent=n;
+    });
+    $('cntOk').onclick=()=>{$('ov').classList.remove('on');res(n)};
+  });
+}
 
 /* ---------- game flow ---------- */
+// Resumable: all the state it needs lives in G (pegInit, pcur, plast) and is saved after every move.
 async function pegging(A){
-  G.peg=[G.hands[0].slice(),G.hands[1].slice()];
-  G.pile=[];G.count=0;G.phase='peg';G.playedAll=[];
-  let cur=1-G.dealer,last=null;
+  if(!G.pegInit){
+    G.peg=[G.hands[0].slice(),G.hands[1].slice()];
+    G.pile=[];G.count=0;G.playedAll=[];G.pcur=1-G.dealer;G.plast=null;G.pegInit=true;
+  }
+  G.phase='peg';
   const left=()=>G.peg[0].length+G.peg[1].length;
   const canPlay=p=>G.peg[p].filter(c=>G.count+val(c)<=31);
   while(left()>0){
+    const cur=G.pcur;
     G.turn=cur;
     const pl=canPlay(cur);
     if(pl.length){
@@ -588,78 +785,102 @@ async function pegging(A){
       }else{status(`Your play — count is ${G.count}`);render();c=await A(humanPlay())}
       G.peg[cur]=G.peg[cur].filter(x=>x!==c);
       G.pile.push(c);G.playedAll.push(c);G.count+=val(c);
+      sfx('play');
       render();
       const r=pegPoints(G.pile,G.count);
       if(r.pts)addScore(cur,r.pts,r.notes.join(', '));
-      last=cur;
+      G.plast=cur;G.pcur=1-cur;
       if(G.count===31){
         // keep the pile on the table after the very last card so it can be seen before counting
-        if(left()>0){await A(pause(800));G.pile=[];G.count=0;last=null}
+        G.plast=null;   // 31 is already scored, so there is no "go" point to give if the game is resumed here
+        if(left()>0){await A(pause(800));G.pile=[];G.count=0}
       }else if(left()===0){addScore(cur,1,'last card')}
-      cur=1-cur;
     }else if(canPlay(1-cur).length){
-      log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();await A(pause(900));cur=1-cur;
+      log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();sfx('go');await A(pause(900));G.pcur=1-cur;
     }else{
-      if(last!==null)addScore(last,1,'go');
       await A(pause(700));
-      cur=last!==null?1-last:cur;
-      G.pile=[];G.count=0;last=null;render();
+      if(G.plast!==null)addScore(G.plast,1,'go');
+      G.pcur=G.plast!==null?1-G.plast:cur;
+      G.pile=[];G.count=0;G.plast=null;render();
     }
+    saveGame();
   }
   G.turn=null;
   // a moment to see the last card and its points before the counting starts
   status('That was the last card — time to count');render();await A(pause(1800));
 }
 
-async function round(A){
-  const d=shuffle(newDeck());
+const discardMsg=()=>`${G.dealer?'NPC deals':'You deal'} — choose 2 cards for ${G.dealer?"NPC's":'your'} crib`;
+async function round(A,resume){
+  if(!resume){
+    const d=shuffle(newDeck()),dealer=G.dealer,pone=1-dealer;
+    G.hands=[[],[]];
+    for(let i=0;i<6;i++){G.hands[pone].push(d.pop());G.hands[dealer].push(d.pop())}
+    G.hands.forEach(h=>h.sort(cmp));
+    G.orig=[G.hands[0].slice(),G.hands[1].slice()];
+    G.deck=d;
+    G.crib=[];G.starter=null;G.pile=[];G.count=0;G.peg=[[],[]];G.playedAll=[];G.turn=null;
+    G.pegInit=false;G.pcur=0;G.plast=null;G.showIdx=0;G.stage='discard';
+  }
+  G.sel=new Set();G.hint=null;
   const dealer=G.dealer,pone=1-dealer;
-  G.hands=[[],[]];
-  for(let i=0;i<6;i++){G.hands[pone].push(d.pop());G.hands[dealer].push(d.pop())}
-  G.hands.forEach(h=>h.sort(cmp));
-  G.orig=[G.hands[0].slice(),G.hands[1].slice()];
-  G.crib=[];G.starter=null;G.pile=[];G.count=0;G.peg=[[],[]];G.sel=new Set();G.hint=null;G.turn=null;G.playedAll=[];
-  G.phase='discard';
-  status(`${dealer?'NPC deals':'You deal'} — choose 2 cards for ${dealer?"NPC's":'your'} crib`);
-  render();
-  const npcD=bestDiscard(G.hands[1],dealer===1,G.level).disc;
-  let idx;
-  while(true){
-    idx=await A(humanDiscard());
-    G.phase='confirm';
-    status(`Sending ${idx.map(i=>fmt(G.hands[0][i])).join(' and ')} to ${dealer?"NPC's":'your'} crib…`);
-    if(await A(undoWindow()))break;
-    G.phase='discard';
-    status(`${dealer?'NPC deals':'You deal'} — choose 2 cards for ${dealer?"NPC's":'your'} crib`);
-    render();
+  if(G.stage==='discard'){
+    G.phase='discard';status(discardMsg());render();saveGame();
+    const npcD=bestDiscard(G.hands[1],dealer===1,G.level).disc;
+    let idx;
+    while(true){
+      idx=await A(humanDiscard());
+      G.phase='confirm';
+      status(`Sending ${idx.map(i=>fmt(G.hands[0][i])).join(' and ')} to ${dealer?"NPC's":'your'} crib…`);
+      if(await A(undoWindow()))break;
+      G.phase='discard';status(discardMsg());render();
+    }
+    const mineD=idx.map(i=>G.hands[0][i]);
+    G.hands[0]=G.hands[0].filter(c=>!mineD.includes(c));
+    G.hands[1]=G.hands[1].filter(c=>!npcD.includes(c));
+    G.crib=[...mineD,...npcD];
+    G.noSave=true;   // between discarding and the cut the state is half-way; no checkpoint until the starter is out
+    G.phase='cut';status('Cutting the deck…');render();await A(pause(900));
+    G.starter=G.deck.pop();render();
+    if(G.starter.r===11){addScore(dealer,2,'his heels (jack starter)')}
+    G.stage='peg';G.pegInit=false;G.noSave=false;saveGame();
+    await A(pause(700));
   }
-  const mineD=idx.map(i=>G.hands[0][i]);
-  G.hands[0]=G.hands[0].filter(c=>!mineD.includes(c));
-  G.hands[1]=G.hands[1].filter(c=>!npcD.includes(c));
-  G.crib=[...mineD,...npcD];
-  G.phase='cut';status('Cutting the deck…');render();await A(pause(900));
-  G.starter=d.pop();render();
-  if(G.starter.r===11){addScore(dealer,2,'his heels (jack starter)')}
-  await A(pause(700));
-  await pegging(A);
-  G.phase='show';G.pile=[];G.count=0;render();
-  const order=[[pone,G.hands[pone],'hand'],[dealer,G.hands[dealer],'hand'],[dealer,G.crib,'crib']];
-  for(const[p,h,kind]of order){
-    const r=scoreHand(h,G.starter,kind==='crib');
-    const title=kind==='crib'?`${p?"NPC's":'Your'} crib`:`${p?"NPC's":'Your'} hand`;
-    status(title);
-    if(p===0){recordHand(stats,r.total,kind==='crib');saveStats()}
-    await A(showPanel(title,h,G.starter,r));
-    addScore(p,r.total,title);
+  if(G.stage==='peg'){
+    await pegging(A);
+    G.stage='show';G.showIdx=0;saveGame();
   }
-  G.dealer=1-G.dealer;
+  if(G.stage==='show'){
+    G.phase='show';G.pile=[];G.count=0;render();
+    const order=[[pone,G.hands[pone],'hand'],[dealer,G.hands[dealer],'hand'],[dealer,G.crib,'crib']];
+    for(let i=G.showIdx;i<3;i++){
+      const[p,h,kind]=order[i];
+      const r=scoreHand(h,G.starter,kind==='crib');
+      const title=kind==='crib'?`${p?"NPC's":'Your'} crib`:`${p?"NPC's":'Your'} hand`;
+      status(title);
+      if(p===0){recordHand(stats,r.total,kind==='crib');saveStats()}
+      let claim=null;
+      if(G.muggins&&p===0)claim=await A(askCount(title,h,G.starter));
+      await A(showPanel(title,h,G.starter,r,claim));
+      if(claim===null)addScore(p,r.total,title);
+      else{
+        const o=resolveClaim(claim,r.total);
+        addScore(0,o.me,title);
+        if(o.npc)addScore(1,o.npc,'muggins');
+      }
+      G.showIdx=i+1;saveGame();
+    }
+    G.dealer=1-G.dealer;G.stage='next';saveGame();
+  }
 }
 
 function gameOver(w){
-  const loser=G.scores[1-w];
-  recordGame(stats,{won:w===0,loserScore:loser,level:G.level});saveStats();
-  const skunk=loser<91?(loser<61?' — double skunk!':' — skunk!'):'';
+  const loser=G.scores[1-w],k=skunkKind(loser,G.target);
+  recordGame(stats,{won:w===0,loserScore:loser,level:G.level,target:G.target});saveStats();
+  clearSave();
+  const skunk=k==='double'?' — double skunk!':k==='skunk'?' — skunk!':'';
   G.phase='over';G.onCard=G.onBtn=null;render();
+  sfx(w===0?'win':'lose');buzz(w===0?220:90);
   $('panel').innerHTML=`<h2>${w===0?'You win! 🎉':'NPC wins'}${skunk}</h2>
     <p>Final score: You ${G.scores[0]} – NPC ${G.scores[1]}</p>
     <p style="opacity:.8">Record: ${stats.w} wins, ${stats.l} losses</p>
@@ -670,39 +891,75 @@ function gameOver(w){
   $('goStats').onclick=()=>openStats();
 }
 
-async function newGame(){
+async function newGame(saved){
   const gen=++GEN;
-  clearInterval(undoTimer);
-  $('ov').classList.remove('on');
+  clearInterval(undoTimer);leaveOpen=false;
+  $('ov').classList.remove('on');$('ov2').classList.remove('on');
   // Every await goes through A so a game that was abandoned stops quietly.
   const A=async p=>{const v=await p;if(gen!==GEN)throw{abort:true};return v};
-  G={scores:[0,0],prev:[0,0],dealer:Math.random()<.5?1:0,log:[],hands:[[],[]],orig:[[],[]],crib:[],peg:[[],[]],pile:[],playedAll:[],count:0,
-     starter:null,sel:new Set(),hint:null,phase:'start',level:settings.level};
-  $('log').innerHTML='';
-  initBoard();
-  try{while(true)await round(A)}
+  const fresh={scores:[0,0],prev:[0,0],dealer:Math.random()<.5?1:0,log:[],hands:[[],[]],orig:[[],[]],crib:[],peg:[[],[]],pile:[],
+    playedAll:[],deck:[],count:0,starter:null,stage:'discard',showIdx:0,pcur:0,plast:null,pegInit:false,
+    level:settings.level,target:settings.target,muggins:settings.muggins};
+  G={...fresh,...(saved||{}),sel:new Set(),hint:null,phase:'start',turn:null};
+  if(!saved)clearSave();
+  $('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('');
+  initBoard();renderBoard();
+  let resume=!!saved;
+  try{while(true){await round(A,resume);resume=false}}
   catch(e){
     if(e&&e.abort)return;
     if(e&&e.win!==undefined)gameOver(e.win);
     else{console.error(e);throw e}
   }
 }
+// On launch: offer to pick up a saved game, otherwise start a new one.
+function start(){
+  applySettings();
+  const saved=loadSave();
+  if(!saved){newGame();return}
+  $('panel').innerHTML=`<h2>Resume your game?</h2>
+    <p>You ${saved.scores[0]} – NPC ${saved.scores[1]}<br><small style="opacity:.75">${cap(saved.level)}${saved.target===61?' · short game':''}${saved.muggins?' · muggins':''}</small></p>
+    <button class="gold" id="resume">Resume</button>
+    <button class="opt" id="fresh">New game</button>`;
+  $('ov').classList.add('on');
+  $('resume').onclick=()=>newGame(saved);
+  $('fresh').onclick=()=>{clearSave();newGame()};
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveGame()});
 
-/* ---------- menu + stats ---------- */
-function closeMenu(){$('ov2').classList.remove('on')}
+/* ---------- menu + stats + back button ---------- */
+function closeMenu(){$('ov2').classList.remove('on');leaveOpen=false}
 function openMenu(){
+  if(!G)return;
+  leaveOpen=false;
   const lv=['easy','normal','hard'];
-  const pending=G&&G.level!==settings.level;
+  const pending=G.level!==settings.level||G.target!==settings.target;
+  const chk=(id,on,label)=>`<label class="chk"><input type="checkbox" id="${id}" ${on?'checked':''}> ${label}</label>`;
   $('panel2').innerHTML=`<h2>Menu</h2>
+    <div class="sect">Game</div>
     <div class="lbl">NPC difficulty${pending?' <small>(applies to the next game)</small>':''}</div>
     <div class="seg">${lv.map(l=>`<button data-lv="${l}" class="${settings.level===l?'on':''}">${cap(l)}</button>`).join('')}</div>
-    <label class="chk"><input type="checkbox" id="fastChk" ${settings.fast?'checked':''}> Skip animations (faster NPC)</label>
+    <div class="lbl">Game length</div>
+    <div class="seg"><button data-tg="121" class="${settings.target===121?'on':''}">Full game (121)</button><button data-tg="61" class="${settings.target===61?'on':''}">Short game (61)</button></div>
+    ${chk('mugChk',settings.muggins,'Muggins: you count your own hand and the NPC takes any points you miss')}
+    <div class="sect">Display</div>
+    ${chk('fourChk',settings.fourColor,'Four-colour deck (clubs green, diamonds blue)')}
+    ${chk('largeChk',settings.large,'Larger cards and text')}
+    <div class="sect">Sound and feel</div>
+    ${chk('soundChk',settings.sound,'Sounds')}
+    ${chk('hapChk',settings.haptics,'Vibration')}
+    ${chk('fastChk',settings.fast,'Skip animations (faster NPC)')}
+    ${bridge()?chk('awakeChk',settings.keepAwake,'Keep the screen on while playing'):''}
     <button class="opt" id="mStats">Stats</button>
     <button class="opt" id="mNew">New game</button>
     <button class="gold" id="mClose">Close</button>`;
   $('ov2').classList.add('on');
-  $('panel2').querySelectorAll('[data-lv]').forEach(b=>b.onclick=()=>{settings.level=b.dataset.lv;saveSettings();openMenu()});
-  $('fastChk').onchange=e=>{settings.fast=e.target.checked;saveSettings();applySettings()};
+  const P=$('panel2');
+  P.querySelectorAll('[data-lv]').forEach(b=>b.onclick=()=>{settings.level=b.dataset.lv;saveSettings();openMenu()});
+  P.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{settings.target=+b.dataset.tg;saveSettings();openMenu()});
+  const bind=(id,key,after)=>{const e=$(id);if(e)e.onchange=ev=>{settings[key]=ev.target.checked;saveSettings();applySettings();if(after)after()}};
+  bind('mugChk','muggins',()=>{if(G)G.muggins=settings.muggins;if(G&&G.phase!=='start')render()});
+  bind('fourChk','fourColor');bind('largeChk','large');bind('soundChk','sound');bind('hapChk','haptics');bind('fastChk','fast');bind('awakeChk','keepAwake');
   $('mStats').onclick=openStats;
   $('mClose').onclick=closeMenu;
   let armed=false;
@@ -712,6 +969,7 @@ function openMenu(){
   };
 }
 function openStats(){
+  leaveOpen=false;
   const s=stats,pct=s.games?Math.round(100*s.w/s.games):0;
   const avg=(sum,n)=>n?(sum/n).toFixed(1):'–';
   const row=(a,b)=>`<li><span>${a}</span><b>${b}</b></li>`;
@@ -742,6 +1000,23 @@ function openStats(){
   };
 }
 $('menuBtn').addEventListener('click',openMenu);
+// Android back button. The app calls this; it returns 'handled' or 'exit'. Leaving mid-game is safe: the game is saved.
+function askLeave(){
+  leaveOpen=true;
+  $('panel2').innerHTML=`<h2>Leave the game?</h2>
+    <p>Your game is saved. You can pick it up where you left off next time.</p>
+    <button class="gold" id="keep">Keep playing</button>
+    <button class="opt" id="leave">Exit</button>`;
+  $('ov2').classList.add('on');
+  $('keep').onclick=closeMenu;
+  $('leave').onclick=()=>{const b=bridge();if(b&&b.exitApp)b.exitApp()};
+}
+window.cribBack=function(){
+  if(leaveOpen)return 'exit';
+  if($('ov2').classList.contains('on')){closeMenu();return 'handled'}
+  if(!G||G.phase==='over'||G.phase==='start')return 'exit';
+  askLeave();return 'handled';
+};
 
 /* ---------- updates ---------- */
 // Do not edit by hand: scripts/release.sh sets APP_VERSION and version.json together.
@@ -779,8 +1054,7 @@ renderVer();
   if(Date.now()-last>24*3600*1000)checkUpdate(false);
 })();
 
-applySettings();
-newGame();
+start();
 </script>
 </body>
 </html>

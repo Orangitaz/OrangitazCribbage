@@ -1,5 +1,5 @@
 {
-  "version": "1.1.1",
-  "notes": "Easier-to-read cribbage board with clearer pegs, plus a short pause after the last card before counting",
+  "version": "1.2.0",
+  "notes": "Save and resume your game, short game to 61, optional muggins, sounds and score popups, four-colour deck and larger text, hints that explain why, Android back button, new icon",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

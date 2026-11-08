@@ -109,6 +109,11 @@ body.large #mine{gap:clamp(1px,.4vw,3px)}
 body.large #msg{font-size:17px}
 body.large #log{font-size:14px;height:42px}
 body.large #btnrow button{font-size:18px}
+.fan{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0}
+.cutc{aspect-ratio:5/7;border-radius:7px;border:2px solid #fffdf6;background:repeating-linear-gradient(45deg,#2b4f9e,#2b4f9e 5px,#1e3a78 5px,#1e3a78 10px);padding:0}
+.cutc:active{transform:translateY(-4px)}
+.cutres{display:flex;justify-content:center;gap:28px;margin:8px 0;text-align:center}
+.cutres .card{margin:4px auto 0}
 </style>
 </head>
 <body>
@@ -375,6 +380,8 @@ function explainPlay(ranked,pile,count){
 
 // ---- rule options ----
 // Skunk lines: a full game (121) has a skunk below 91 and a double skunk below 61; a short game (61) has a skunk below 31.
+// Cutting for the first deal: the lower card deals (ace is low, suits do not matter). null = tie, cut again.
+function cutDealer(mine,npc){return mine.r===npc.r?null:(mine.r<npc.r?0:1)}
 function skunkKind(loserScore,target){
   if(target===61)return loserScore<31?'skunk':null;
   if(loserScore<61)return 'double';
@@ -897,7 +904,7 @@ async function newGame(saved){
   $('ov').classList.remove('on');$('ov2').classList.remove('on');
   // Every await goes through A so a game that was abandoned stops quietly.
   const A=async p=>{const v=await p;if(gen!==GEN)throw{abort:true};return v};
-  const fresh={scores:[0,0],prev:[0,0],dealer:Math.random()<.5?1:0,log:[],hands:[[],[]],orig:[[],[]],crib:[],peg:[[],[]],pile:[],
+  const fresh={scores:[0,0],prev:[0,0],dealer:0,log:[],hands:[[],[]],orig:[[],[]],crib:[],peg:[[],[]],pile:[],
     playedAll:[],deck:[],count:0,starter:null,stage:'discard',showIdx:0,pcur:0,plast:null,pegInit:false,
     level:settings.level,target:settings.target,muggins:settings.muggins};
   G={...fresh,...(saved||{}),sel:new Set(),hint:null,phase:'start',turn:null};
@@ -905,12 +912,37 @@ async function newGame(saved){
   $('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('');
   initBoard();renderBoard();
   let resume=!!saved;
-  try{while(true){await round(A,resume);resume=false}}
+  try{
+    if(!saved){G.dealer=await A(cutForDeal());status('')}
+    while(true){await round(A,resume);resume=false}}
   catch(e){
     if(e&&e.abort)return;
     if(e&&e.win!==undefined)gameOver(e.win);
     else{console.error(e);throw e}
   }
+}
+// Cut for the first deal: pick one of the face-down cards, the NPC cuts another, the lower card deals.
+function cutForDeal(){
+  return new Promise(res=>{
+    const N=12;
+    const round=()=>{
+      const d=shuffle(newDeck()),mine=d[0],npcC=d[1];
+      $('panel').innerHTML=`<h2>Cut for the first deal</h2>
+        <p>Pick a card. The lower card deals first.</p>
+        <div class="fan">${Array.from({length:N},(_,i)=>`<button class="cutc" data-i="${i}" aria-label="Card ${i+1}"></button>`).join('')}</div>`;
+      $('ov').classList.add('on');
+      $('panel').querySelectorAll('.cutc').forEach(b=>b.onclick=()=>{
+        const w=cutDealer(mine,npcC);
+        const result=w===null?'Same rank — cut again.':w===0?'Your card is lower: you deal first.':'NPC’s card is lower: NPC deals first.';
+        sfx('play');
+        $('panel').innerHTML=`<h2>Cut for the first deal</h2>
+          <div class="cutres"><div>You${cardEl(mine)}</div><div>NPC${cardEl(npcC)}</div></div>
+          <p>${result}</p><button class="gold" id="cutOk">${w===null?'Cut again':'Deal'}</button>`;
+        $('cutOk').onclick=()=>{$('ov').classList.remove('on');if(w===null)round();else res(w)};
+      });
+    };
+    round();
+  });
 }
 // On launch: offer to pick up a saved game, otherwise start a new one.
 function start(){

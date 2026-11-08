@@ -240,6 +240,7 @@ function botGame(g, levelMe, levelNpc, stubGameOver = true) {
     humanPlay=async()=>{const pl=G.peg[0].filter(c=>G.count+val(c)<=31);
       return choosePlay({playable:pl,pile:G.pile,count:G.count,level:${JSON.stringify(levelMe)},unseen:unseenFor(0),oppLeft:G.peg[1].length,myHand:G.peg[0]})};
     undoWindow=async()=>true;
+    cutForDeal=async()=>Math.random()<.5?0:1;
     showPanel=async()=>{};
     var results=[];
     ${stubGameOver ? 'gameOver=w=>{results.push({w,s:[...G.scores]})};' : ''}`);
@@ -314,6 +315,12 @@ test('stats are recorded by the game and old 1.0 records are migrated', async ()
 test('skunk lines: full game (91 / 61) and short game (31)', () => {
   assert.deepEqual([90, 91, 60, 61, 0].map(x => L.skunkKind(x, 121)), ['skunk', null, 'double', 'skunk', 'double']);
   assert.deepEqual([30, 31, 0].map(x => L.skunkKind(x, 61)), ['skunk', null, 'skunk']);
+});
+test('cutting for deal: lower card deals, ace is low, equal ranks cut again', () => {
+  assert.equal(L.cutDealer(C(2, 0), C(9, 1)), 0);
+  assert.equal(L.cutDealer(C(1, 0), C(2, 1)), 0);
+  assert.equal(L.cutDealer(C(13, 0), C(12, 1)), 1);
+  assert.equal(L.cutDealer(C(7, 0), C(7, 3)), null);
 });
 test('muggins: what you claim is what you score, the NPC takes the difference', () => {
   assert.deepEqual(L.resolveClaim(8, 12), { me: 8, npc: 4, over: false });

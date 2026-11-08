@@ -42,7 +42,7 @@ The `app/` folder is a small WebView wrapper (Kotlin, min Android 8.0). At build
 
 ### Get an APK from GitHub
 
-- **On demand:** Actions tab, "Build Android APK", "Run workflow". When it finishes, download the `OrangitazCribbage-apk` artifact from the run page (it is a zip containing the APK).
+- **On demand:** Actions tab, "Build Android APK", "Run workflow". When it finishes, download the `OrangitazCribbage-<version>-apk` artifact from the run page (it is a zip containing the APK).
 - **As a release:** bump the version with `scripts/release.sh` (below) and push. GitHub builds the APK and publishes the release by itself, using your release notes as the description.
 
 The workflow runs the tests first and only builds the APK if they pass.

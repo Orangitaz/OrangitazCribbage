@@ -1029,18 +1029,35 @@ function renderVer(extra){
   $('ver').innerHTML=`v${APP_VERSION} · ${extra||'<a id="chk">Check for updates</a>'}`;
   const c=$('chk');if(c)c.onclick=()=>checkUpdate(true);
 }
+const API_URL='https://api.github.com/repos/Orangitaz/OrangitazCribbage/releases/latest';
+const APK_URL='https://github.com/Orangitaz/OrangitazCribbage/releases/latest/download/OrangitazCribbage.apk';
+async function getJSON(url){
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),8000);
+  try{
+    const res=await fetch(url,{cache:'no-store',signal:ctl.signal});
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    return await res.json();
+  }finally{clearTimeout(to)}
+}
+// The update only counts once its release (with the APK) is published, so "Download" always gets the file.
 async function checkUpdate(manual){
   if(manual)renderVer('Checking…');
   try{
-    const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),8000);
-    const res=await fetch(VERSION_URL+'?t='+Date.now(),{cache:'no-store',signal:ctl.signal});
-    clearTimeout(to);
-    if(!res.ok)throw new Error('HTTP '+res.status);
-    const info=await res.json();
+    let latest=null,notes='',apk=APK_URL;
+    try{
+      const rel=await getJSON(API_URL);
+      latest=String(rel.tag_name||'').replace(/^v/,'');
+      notes=String(rel.body||'').trim();
+      const a=(rel.assets||[]).find(x=>/\.apk$/i.test(x.name||'')&&/^https:\/\/github\.com\//.test(x.browser_download_url||''));
+      if(a)apk=a.browser_download_url;
+    }catch(e){
+      // fall back to version.json (then the link goes to the releases page)
+      const info=await getJSON(VERSION_URL+'?t='+Date.now());
+      latest=info.version;notes=info.notes||'';apk=/^https:\/\/github\.com\//.test(info.url||'')?info.url:RELEASES_URL;
+    }
     try{localStorage.setItem('crib-lastcheck',String(Date.now()))}catch(e){}
-    if(cmpVer(info.version,APP_VERSION)>0){
-      const url=/^https:\/\/github\.com\//.test(info.url||'')?info.url:RELEASES_URL;
-      renderVer(`<b>Update v${esc(info.version)} available</b> — <a href="${esc(url)}" target="_blank" rel="noopener">Download</a>${info.notes?`<br>${esc(info.notes)}`:''}`);
+    if(/^\d+\.\d+\.\d+$/.test(latest)&&cmpVer(latest,APP_VERSION)>0){
+      renderVer(`<b>Update v${esc(latest)} available</b> — <a href="${esc(apk)}" target="_blank" rel="noopener">Download</a>${notes?`<br>${esc(notes.slice(0,200))}`:''}`);
     }else if(manual)renderVer(`Up to date · <a id="chk">Check again</a>`);
     else renderVer();
   }catch(e){

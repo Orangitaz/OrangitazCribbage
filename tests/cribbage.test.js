@@ -425,6 +425,25 @@ test('resume: saving at every pause (as when the app is backgrounded) always giv
   }
   assert.ok(n > 10);
 });
+test('update check: offers the published APK, ignores unreleased versions, falls back to version.json', async () => {
+  const g = loadGame();
+  const run = async (fetchImpl) => {
+    g.run(`fetch=${fetchImpl};renderVer=x=>{lastVer=x||''}`);
+    await g.run('checkUpdate(true)');
+    return g.run('lastVer');
+  };
+  const rel = (tag) => `u=>Promise.resolve({ok:true,json:async()=>(${JSON.stringify({ tag_name: tag, body: 'Notes',
+    assets: [{ name: 'OrangitazCribbage-9.0.0.apk', browser_download_url: 'https://github.com/Orangitaz/OrangitazCribbage/releases/download/v9.0.0/OrangitazCribbage-9.0.0.apk' }] })})})`;
+  let out = await run(rel('v9.0.0'));
+  assert.match(out, /Update v9\.0\.0 available/);
+  assert.match(out, /href="https:\/\/github\.com\/Orangitaz\/OrangitazCribbage\/releases\/download\/v9\.0\.0\/OrangitazCribbage-9\.0\.0\.apk"/);
+  out = await run(rel('v0.0.1'));
+  assert.match(out, /Up to date/);
+  out = await run(`u=>u.includes('api.github.com')?Promise.reject(new Error('x')):Promise.resolve({ok:true,json:async()=>({version:'9.0.0',notes:'n',url:'https://github.com/x/y'})})`);
+  assert.match(out, /Update v9\.0\.0 available/);
+  out = await run(`u=>Promise.reject(new Error('offline'))`);
+  assert.match(out, /Couldn't check/);
+});
 test('finished games clear the saved game', async () => {
   const g = loadGame();
   botGame(g, 'normal', 'normal', false);

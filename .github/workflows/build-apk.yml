@@ -1,7 +1,9 @@
 name: Build Android APK
 
 # How a release gets published:
-#  - Every 6 hours (schedule): if the version in cribbage.html has no GitHub Release yet, build and publish it.
+#  - On every push to main that touches the game or the app: if the version in cribbage.html has no GitHub Release
+#    yet, build and publish it (a push that does not bump the version builds nothing).
+#  - Every 6 hours (schedule): the same check, as a safety net.
 #  - By hand (Actions > Build Android APK > Run workflow): builds the APK as a download. Tick "publish" to also
 #    publish it as a GitHub Release right away.
 #  - Pushing a tag like v1.2.0 also publishes (or attaches the APK to a release you made in the browser).
@@ -15,7 +17,21 @@ on:
         type: boolean
         default: false
   push:
+    branches: [main]
+    paths:
+      - 'cribbage.html'
+      - 'version.json'
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - 'gradle.properties'
+      - '.github/workflows/build-apk.yml'
     tags: ['v*']
+
+# one release build at a time, so a push and the schedule cannot publish the same version twice
+concurrency:
+  group: build-apk
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -47,12 +63,12 @@ jobs:
 
           publish=false
           if [ "$GITHUB_REF_TYPE" = "tag" ]; then publish=true
-          elif [ "$EVENT" = "schedule" ] && [ "$exists" = "false" ]; then publish=true
+          elif { [ "$EVENT" = "schedule" ] || [ "$EVENT" = "push" ]; } && [ "$exists" = "false" ]; then publish=true
           elif [ "$EVENT" = "workflow_dispatch" ] && [ "$PUBLISH_INPUT" = "true" ]; then publish=true
           fi
 
           build=true
-          if [ "$EVENT" = "schedule" ] && [ "$exists" = "true" ]; then
+          if { [ "$EVENT" = "schedule" ] || { [ "$EVENT" = "push" ] && [ "$GITHUB_REF_TYPE" = "branch" ]; }; } && [ "$exists" = "true" ]; then
             build=false
             echo "Version $VER is already published - nothing to do."
           fi

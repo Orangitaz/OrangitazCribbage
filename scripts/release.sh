@@ -48,5 +48,5 @@ git commit -m "Release v$VER"
 echo
 echo "Release v$VER is committed. Publish it with:"
 echo "  git push origin main"
-echo "GitHub then builds the APK and publishes the release within 6 hours,"
+echo "GitHub then builds the APK and publishes the release within minutes,"
 echo "or right away if you run the workflow by hand and tick \"publish\"."

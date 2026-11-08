@@ -80,7 +80,7 @@ git push origin main
 
 The script sets the version in `cribbage.html` and `version.json` together, writes your notes into `version.json`, runs the tests and commits. After the push, the "Build Android APK" workflow does the rest:
 
-- **Automatically:** it checks every 6 hours. If the version has no GitHub Release yet, it runs the tests, builds the signed APK and publishes the release, with the APK attached as `OrangitazCribbage-<version>.apk` and as `OrangitazCribbage.apk` (a permanent link: `https://github.com/Orangitaz/OrangitazCribbage/releases/latest/download/OrangitazCribbage.apk`).
+- **Automatically:** it runs on every push to `main` that changes the game or the app, and also checks every 6 hours as a safety net. If the version has no GitHub Release yet, it runs the tests, builds the signed APK and publishes the release, with the APK attached as `OrangitazCribbage-<version>.apk` and as `OrangitazCribbage.apk` (a permanent link: `https://github.com/Orangitaz/OrangitazCribbage/releases/latest/download/OrangitazCribbage.apk`).
 - **Right away:** Actions tab, "Build Android APK", "Run workflow", tick **publish**. Running it without the tick only builds a downloadable APK and publishes nothing.
 - **By tag:** pushing a tag like `v1.1.1`, or publishing a release in the browser, also works; the build attaches the APK to it.
 

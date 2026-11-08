@@ -470,6 +470,7 @@ function unpackGame(o){
     if(o.dealer!==0&&o.dealer!==1)return null;
     if(!['easy','normal','hard'].includes(o.level)||(o.target!==121&&o.target!==61))return null;
     if(!['discard','peg','show','next'].includes(o.stage))return null;
+    if(o.stage==='discard'&&!(o.hands.length===2&&o.hands[0].length===6&&o.hands[1].length===6))return null;
     if(!two(o.hands)||!o.hands.every(isCards)||!two(o.orig)||!o.orig.every(isCards)||!two(o.peg)||!o.peg.every(isCards))return null;
     if(!isCards(o.crib)||!isCards(o.deck)||!isCards(o.pile)||!isCards(o.playedAll))return null;
     if(o.starter!==null&&!isCard(o.starter))return null;
@@ -530,7 +531,8 @@ let stats=loadStats();
 function saveStats(){try{localStorage.setItem('crib-stats',JSON.stringify(stats))}catch(e){}}
 
 /* saved game: checkpoints are written as play goes on, so a closed or killed app can pick up where it left off */
-function saveGame(){if(!G||G.phase==='over'||G.noSave)return;try{localStorage.setItem('crib-save',JSON.stringify(packGame(G)))}catch(e){}}
+function saveGame(){if(!G||G.phase==='over'||G.phase==='start'||G.noSave)return;   // 'start' = still cutting for the deal, nothing dealt yet
+ try{localStorage.setItem('crib-save',JSON.stringify(packGame(G)))}catch(e){}}
 function clearSave(){try{localStorage.removeItem('crib-save')}catch(e){}}
 function loadSave(){try{const raw=localStorage.getItem('crib-save');return raw?unpackGame(JSON.parse(raw)):null}catch(e){return null}}
 

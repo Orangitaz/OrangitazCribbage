@@ -451,6 +451,19 @@ test('update check: offers the published APK, ignores unreleased versions, falls
   out = await run(`u=>Promise.reject(new Error('offline'))`);
   assert.match(out, /Couldn't check/);
 });
+test('nothing is saved while cutting for the deal, and a save with no dealt hands is rejected', async () => {
+  const g = loadGame();
+  g.run(`cutForDeal=()=>new Promise(()=>{})`);   // never answered, like leaving the app at the cut
+  g.run('newGame()');
+  g.run('saveGame()');
+  assert.equal(g.store.has('crib-save'), false);
+  const d = L.newDeck();
+  const empty = { v: 1, scores: [0, 0], prev: [0, 0], dealer: 0, level: 'normal', target: 121, muggins: false, hands: [[], []],
+    orig: [[], []], crib: [], starter: null, deck: [], peg: [[], []], pile: [], playedAll: [], count: 0, stage: 'discard',
+    showIdx: 0, pcur: 0, plast: null, pegInit: false, log: [] };
+  assert.equal(L.unpackGame(empty), null);
+  assert.ok(L.unpackGame({ ...empty, hands: [d.slice(0, 6), d.slice(6, 12)], orig: [d.slice(0, 6), d.slice(6, 12)], deck: d.slice(12) }));
+});
 test('finished games clear the saved game', async () => {
   const g = loadGame();
   botGame(g, 'normal', 'normal', false);

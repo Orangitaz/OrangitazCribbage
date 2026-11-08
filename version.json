@@ -1,5 +1,5 @@
 {
   "version": "1.1.1",
-  "notes": "Easier-to-read cribbage board: four bands of 30 holes, bigger and clearer pegs, numbers on the board and large scores",
+  "notes": "Easier-to-read cribbage board with clearer pegs, plus a short pause after the last card before counting",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

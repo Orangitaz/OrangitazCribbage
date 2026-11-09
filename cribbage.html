@@ -232,8 +232,21 @@ function cribAvg(disc,unseen,samples){
   for(const[a,b,c]of samples)t+=scoreHand([disc[0],disc[1],unseen[a],unseen[b]],unseen[c],true).total;
   return t/samples.length;
 }
-// Choose the two cards to put in the crib. level: 'easy' | 'normal' | 'hard'.
+// Difficulty is a dial: "skill" 0 plays in the Easy style, 0.5 in the Normal style and 1 in the Hard style;
+// below 0 it also makes some plain random plays. Every decision picks between the two nearest styles at random,
+// so a skill of 0.75 plays half its decisions as Normal and half as Hard.
+const LEVEL_SKILL={easy:-0.1,normal:0.25,hard:1};   // tuned by simulation: about 3, 5 and 7 wins in 10 against a casual player
+function skillLevel(skill,rnd=Math.random()){
+  if(skill<0)return rnd<-skill*2?'random':'easy';
+  if(skill<0.5)return rnd<skill*2?'normal':'easy';
+  return rnd<(skill-0.5)*2?'hard':'normal';
+}
+// Choose the two cards to put in the crib. level: 'random' | 'easy' | 'normal' | 'hard'.
 function bestDiscard(hand,isDealer,level){
+  if(level==='random'){
+    const i=Math.floor(Math.random()*6);let j=Math.floor(Math.random()*5);if(j>=i)j++;
+    return{disc:[hand[i],hand[j]],keep:hand.filter((_,k)=>k!==i&&k!==j),keepAvg:0,cribV:0,score:0,maxKeepAvg:0};
+  }
   const known=new Set(hand.map(key));
   const unseen=newDeck().filter(c=>!known.has(key(c)));
   const samples=level==='hard'?makeSamples(unseen.length,150):null;
@@ -325,6 +338,7 @@ function rankPlays(o){
 function choosePlay(o){
   const{playable,pile,count,level}=o,unseen=o.unseen||[],oppLeft=o.oppLeft||0;
   const ptsOf=c=>pegPoints([...pile,c],count+val(c)).pts;
+  if(level==='random')return playable[Math.floor(Math.random()*playable.length)];
   if(level==='easy'){
     let best=playable[0],bp=-1;
     for(const c of playable){const p=ptsOf(c);if(p>bp){bp=p;best=c}}
@@ -535,6 +549,8 @@ function loadStats(){
 }
 let stats=loadStats();
 function saveStats(){try{localStorage.setItem('crib-stats',JSON.stringify(stats))}catch(e){}}
+// The play style the NPC uses for one decision.
+const npcLvl=()=>skillLevel(LEVEL_SKILL[G.level]);
 
 /* saved game: checkpoints are written as play goes on, so a closed or killed app can pick up where it left off */
 function saveGame(){if(!G||G.phase==='over'||G.phase==='start'||G.noSave)return;   // 'start' = still cutting for the deal, nothing dealt yet
@@ -801,7 +817,7 @@ async function pegging(A){
       let c;
       if(cur===1){
         status('NPC is thinking…');render();await A(pause(900));
-        c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:G.level,unseen:unseenFor(1),oppLeft:G.peg[0].length,myHand:G.peg[1]});
+        c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:npcLvl(),unseen:unseenFor(1),oppLeft:G.peg[0].length,myHand:G.peg[1]});
       }else{status(`Your play — count is ${G.count}`);render();c=await A(humanPlay())}
       G.peg[cur]=G.peg[cur].filter(x=>x!==c);
       G.pile.push(c);G.playedAll.push(c);G.count+=val(c);
@@ -846,7 +862,7 @@ async function round(A,resume){
   const dealer=G.dealer,pone=1-dealer;
   if(G.stage==='discard'){
     G.phase='discard';status(discardMsg());render();saveGame();
-    const npcD=bestDiscard(G.hands[1],dealer===1,G.level).disc;
+    const npcD=bestDiscard(G.hands[1],dealer===1,npcLvl()).disc;
     let idx;
     while(true){
       idx=await A(humanDiscard());
@@ -1000,6 +1016,7 @@ function openMenu(){
     <div class="sect">Game</div>
     <div class="lbl">NPC difficulty${pending?' <small>(applies to the next game)</small>':''}</div>
     <div class="seg">${lv.map(l=>`<button data-lv="${l}" class="${settings.level===l?'on':''}">${cap(l)}</button>`).join('')}</div>
+    <div class="sub" style="margin:4px 0 0;text-align:left">Against a casual player the NPC wins about 3 games in 10 on Easy, 5 in 10 on Normal and 7 in 10 on Hard.</div>
     <div class="lbl">Game length</div>
     <div class="seg"><button data-tg="121" class="${settings.target===121?'on':''}">Full game (121)</button><button data-tg="61" class="${settings.target===61?'on':''}">Short game (61)</button></div>
     ${chk('mugChk',settings.muggins,'Muggins: you count your own hand and the NPC takes any points you miss')}

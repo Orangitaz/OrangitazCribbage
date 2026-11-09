@@ -30,13 +30,17 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 
 ## The NPC
 
-| Level | Discards | Pegging |
-|---|---|---|
-| Easy | Averages over possible starter cards but ignores the crib, plus a lot of randomness | Usually takes a scoring play, otherwise plays at random |
-| Normal | Maximises the average value of the kept hand and adjusts for the crib with simple rules of thumb | Takes scoring plays, avoids leaving counts of 5, 10 or 21, leads low |
-| Hard | Same, but values the crib by sampling random crib cards and starters | Guesses the opponent's cards from the cards it has not seen, plays out the rest of the round for each candidate card, and picks the one with the best average point difference |
+Difficulty is a dial. Each decision the NPC makes is played in one of four styles, mixed in a fixed proportion per level:
 
-Measured over simulated games (200 to 500 per matchup, so treat these as roughly ±4 points): Normal beats Easy about 70% of the time, Hard beats Easy about 77%, and Hard beats Normal about 60%. Cribbage has a lot of luck, so a better NPC still loses often.
+| Level | Mix of styles | Wins against a casual player |
+|---|---|---|
+| Easy | mostly the Easy style, with some plain random plays | about 3 games in 10 |
+| Normal | half Easy style, half Normal style | about 5 in 10 |
+| Hard | always the strongest style | about 7 in 10 |
+
+The styles: **Easy** averages over possible starter cards but ignores the crib, adds a lot of randomness, and usually takes a scoring play when pegging. **Normal** maximises the kept hand and adjusts for the crib with rules of thumb, takes scoring plays, avoids leaving counts of 5, 10 or 21, and leads low. **Hard** values the crib by sampling random crib cards and starters, and while pegging guesses your cards from the ones it has not seen, plays out the rest of the round for each candidate card and picks the one with the best average point difference.
+
+The percentages come from simulated games (400 to 500 per figure, so roughly plus or minus 4 points) against a bot standing in for a casual player. A stronger player will win more, and Hard against a strong bot wins about 6 in 10. Cribbage has a lot of luck, so even Hard loses often.
 
 ## iPhone and other browsers (web version)
 

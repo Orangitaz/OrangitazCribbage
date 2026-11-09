@@ -12,7 +12,7 @@ function loadLogic() {
   const code = script().split('// ==LOGIC==')[1].split('// ==END LOGIC==')[0];
   return new Function(code + `
     return {SUITS,RANKS,val,key,newDeck,shuffle,scoreHand,pegPoints,cribVal,makeSamples,cribAvg,bestDiscard,pHasAny,pegSim,rankPlays,
-            choosePlay,explainDiscard,explainPlay,skunkKind,cutDealer,resolveClaim,packGame,unpackGame,cmpVer,emptyStats,mergeStats,recordHand,recordGame,pegCell};`)();
+            choosePlay,explainDiscard,explainPlay,skunkKind,LEVEL_SKILL,skillLevel,cutDealer,resolveClaim,packGame,unpackGame,cmpVer,emptyStats,mergeStats,recordHand,recordGame,pegCell};`)();
 }
 
 // The whole game script, with a fake DOM and instant timers, for running full games.

@@ -478,6 +478,24 @@ test('start screen: Continue only when a game is saved; settings and stats open 
   assert.match(g.run("$('panel').innerHTML"), /hCont/);
   assert.match(g.run("$('panel').innerHTML"), /You \d+ – NPC \d+/);
 });
+test('difficulty dial: styles blend smoothly, Easy < Normal < Hard, and random plays are legal', () => {
+  const S = L.LEVEL_SKILL;
+  assert.ok(S.easy < S.normal && S.normal < S.hard && S.hard === 1);
+  assert.equal(L.skillLevel(0, 0.5), 'easy');
+  assert.equal(L.skillLevel(0.5, 0.5), 'normal');
+  assert.equal(L.skillLevel(1, 0.999), 'hard');
+  assert.equal(L.skillLevel(-0.5, 0.5), 'random');
+  assert.equal(L.skillLevel(-0.5, 1), 'easy');
+  const hand = [C(2, 0), C(5, 1), C(7, 2), C(9, 3), C(11, 0), C(13, 1)];
+  for (let i = 0; i < 50; i++) {
+    const r = L.bestDiscard(hand, true, 'random');
+    assert.equal(r.disc.length, 2);
+    assert.notEqual(r.disc[0], r.disc[1]);
+    assert.equal(r.keep.length, 4);
+    const c = L.choosePlay({ playable: [C(3, 0), C(4, 1)], pile: [], count: 0, level: 'random', unseen: [], oppLeft: 0 });
+    assert.ok(c.r === 3 || c.r === 4);
+  }
+});
 test('finished games clear the saved game', async () => {
   const g = loadGame();
   botGame(g, 'normal', 'normal', false);

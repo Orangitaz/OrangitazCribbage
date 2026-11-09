@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
-  "notes": "New start screen with Continue, New game, Settings and Stats; Main screen option in the menu",
+  "version": "1.5.0",
+  "notes": "Retuned difficulty: Easy wins about 3 in 10 games against a casual player, Normal 5 in 10, Hard 7 in 10",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

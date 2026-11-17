@@ -1,5 +1,5 @@
 {
-  "version": "1.5.0",
-  "notes": "Retuned difficulty: Easy wins about 3 in 10 games against a casual player, Normal 5 in 10, Hard 7 in 10",
+  "version": "1.6.0",
+  "notes": "Play with 3 or 4 players: three players, four players on their own, or four players as two teams with an NPC partner",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

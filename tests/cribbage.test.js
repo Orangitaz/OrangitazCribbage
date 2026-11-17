@@ -123,24 +123,15 @@ test('version compare', () => {
   assert.equal(L.cmpVer('1.0', '1.0.0'), 0);
 });
 
-test('board: every score 1-120 has its own hole, in reading order; 0 is the start and 121 is home', () => {
-  assert.deepEqual(L.pegCell(0), { start: true });
-  assert.deepEqual(L.pegCell(-3), { start: true });
-  assert.deepEqual(L.pegCell(121), { home: true });
-  const seen = new Set();
-  let prev = -1;
-  for (let sc = 1; sc <= 120; sc++) {
-    const c = L.pegCell(sc);
-    assert.ok(c.band >= 0 && c.band < 4 && c.col >= 0 && c.col < 30, `score ${sc}`);
-    const idx = c.band * 30 + c.col;
-    assert.ok(idx > prev, 'holes advance left to right, top to bottom');
-    prev = idx; seen.add(idx);
-  }
-  assert.equal(seen.size, 120);
-  assert.deepEqual(L.pegCell(30), { band: 0, col: 29 });
-  assert.deepEqual(L.pegCell(31), { band: 1, col: 0 });
-  assert.deepEqual(L.pegCell(61), { band: 2, col: 0 });   // double skunk line sits before 61
-  assert.deepEqual(L.pegCell(91), { band: 3, col: 0 });   // skunk line sits before 91
+test('progress board: percent of the target, clamped, with skunk lines at 61 and 91 (31 in a short game)', () => {
+  assert.equal(L.progressPct(0, 121), 0);
+  assert.equal(L.progressPct(121, 121), 100);
+  assert.equal(L.progressPct(200, 121), 100);
+  assert.equal(L.progressPct(-4, 121), 0);
+  assert.equal(Math.round(L.progressPct(61, 121)), 50);
+  assert.equal(L.progressPct(30.5, 61), 50);
+  assert.deepEqual(L.skunkLines(121), [61, 91]);
+  assert.deepEqual(L.skunkLines(61), [31]);
 });
 
 test('stats: wins, losses, streaks, skunks, per difficulty', () => {
@@ -328,10 +319,7 @@ test('muggins: what you claim is what you score, the NPC takes the difference', 
   assert.deepEqual(L.resolveClaim(14, 12), { me: 12, npc: 0, over: true });
   assert.deepEqual(L.resolveClaim(0, 0), { me: 0, npc: 0, over: false });
 });
-test('short game: board cells and stats use the 61 target', () => {
-  assert.equal(L.pegCell(61, 61).home, true);
-  assert.equal(L.pegCell(60, 61).home, undefined);
-  assert.equal(L.pegCell(61, 121).home, undefined);
+test('short game: stats use the 61 target', () => {
   const st = L.emptyStats();
   L.recordGame(st, { won: true, loserScore: 20, level: 'normal', target: 61 });
   L.recordGame(st, { won: false, loserScore: 45, level: 'normal', target: 61 });

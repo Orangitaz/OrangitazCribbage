@@ -12,12 +12,13 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 - Deal, discard to the crib, cut the starter (his heels scores 2 for the dealer)
 - Pegging: 15, 31, pairs, runs, go and last card
 - The show: hand then crib, with a point-by-point breakdown (fifteens, pairs, runs, flush, nobs)
-- A cribbage board with two lanes per player (out and back), a front and a back peg each, and the skunk lines (with three or four scorers it shows a progress bar for each instead)
+- A progress board: one bar per player or team, a pale stretch for the points just scored, and the skunk lines marked (91 and 61, or 31 in a short game)
 - **Hint button** (blue glow): suggests the best discard, and the best card to play while pegging
 - **Undo**: after you send two cards to the crib you have a few seconds to take them back
 - **Three difficulty levels** (Menu): Easy, Normal and Hard; a change applies from the next game
 - **Stats** (Menu): games, win/loss, streaks, skunks, average and best hand and crib, and results per difficulty. Saved on the device and can be reset
 - **Skip animations** (Menu): shortens the NPC's pauses
+- **At the end of a game** you can play again, change the game type or any setting, see stats, or go to the main screen
 - **Start screen**: Continue (when a game is saved), New game, Settings and Stats; the in-game menu has "Main screen" to get back to it
 - **Cut for the first deal**: pick a card, the lower card deals
 - **Save and resume**: the game is saved after every move, so if the app is closed or Android stops it, Continue picks up where you left off

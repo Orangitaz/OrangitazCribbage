@@ -236,11 +236,11 @@ test('pHasAny is a probability and monotone', () => {
 // ---------- whole game, headless ----------
 function botGame(g, levelMe, levelNpc, stubGameOver = true) {
   g.run(`settings.level=${JSON.stringify(levelNpc)};
-    humanDiscard=async()=>{const r=bestDiscard(G.hands[0],G.dealer===0,${JSON.stringify(levelMe)});return r.disc.map(c=>G.hands[0].indexOf(c))};
+    humanDiscard=async()=>{const r=bestDiscard(G.hands[0],cribMine(0),${JSON.stringify(levelMe)});return r.disc.map(c=>G.hands[0].indexOf(c))};
     humanPlay=async()=>{const pl=G.peg[0].filter(c=>G.count+val(c)<=31);
-      return choosePlay({playable:pl,pile:G.pile,count:G.count,level:${JSON.stringify(levelMe)},unseen:unseenFor(0),oppLeft:G.peg[1].length,myHand:G.peg[0]})};
+      return choosePlay({playable:pl,pile:G.pile,count:G.count,level:${JSON.stringify(levelMe)},unseen:unseenFor(0),oppLeft:oppLeftFor(0),myHand:G.peg[0]})};
     undoWindow=async()=>true;
-    cutForDeal=async()=>Math.random()<.5?0:1;
+    cutForDeal=async()=>Math.floor(Math.random()*NS());
     showPanel=async()=>{};
     var results=[];
     ${stubGameOver ? 'gameOver=w=>{results.push({w,s:[...G.scores]})};' : ''}`);
@@ -494,6 +494,159 @@ test('difficulty dial: styles blend smoothly, Easy < Normal < Hard, and random p
     assert.equal(r.keep.length, 4);
     const c = L.choosePlay({ playable: [C(3, 0), C(4, 1)], pile: [], count: 0, level: 'random', unseen: [], oppLeft: 0 });
     assert.ok(c.r === 3 || c.r === 4);
+  }
+});
+// ---------- 3 and 4 player games ----------
+test('player modes: seats, sides and deal sizes', () => {
+  assert.deepEqual(Object.keys(L.MODES), ['2', '3', '4i', '4t']);
+  assert.equal(L.entOf('4t', 0), 0); assert.equal(L.entOf('4t', 2), 0);   // you and the player opposite are a team
+  assert.equal(L.entOf('4t', 1), 1); assert.equal(L.entOf('4t', 3), 1);
+  assert.equal(L.entOf('4i', 3), 3); assert.equal(L.entOf('3', 2), 2);
+  assert.equal(L.handSize(2), 6); assert.equal(L.handSize(3), 5); assert.equal(L.handSize(4), 5);
+  assert.equal(L.cribStart(3), 1); assert.equal(L.cribStart(2), 0); assert.equal(L.cribStart(4), 0);
+  for (const m of Object.keys(L.MODES)) {
+    assert.equal(L.SEAT_NAMES[m].length, L.MODES[m].n);
+    assert.equal(L.ENT_NAMES[m].length, L.MODES[m].ents);
+  }
+});
+test('cut for the deal: lowest card, ties cut again, any number of players', () => {
+  assert.equal(L.cutLowest([C(9), C(3), C(12)]), 1);
+  assert.equal(L.cutLowest([C(1), C(13), C(7), C(2)]), 0);
+  assert.equal(L.cutLowest([C(4, 0), C(4, 1), C(9)]), null);
+  assert.equal(L.cutLowest([C(4, 0), C(4, 1), C(2)]), 2);
+});
+test('one-card discards: five cards in, one to the crib, four kept', () => {
+  const hand = [C(2, 0), C(5, 1), C(7, 2), C(9, 3), C(13, 1)];
+  for (const level of ['random', 'easy', 'normal', 'hard']) {
+    const r = L.bestDiscard(hand, level === 'hard', level);
+    assert.equal(r.disc.length, 1, level);
+    assert.equal(r.keep.length, 4, level);
+    assert.ok(hand.includes(r.disc[0]));
+  }
+  // with 5, 5, 5, J and a king, Hard and Normal never break up the three fives
+  const great = [C(5, 0), C(5, 1), C(5, 2), C(11, 3), C(13, 1)];
+  for (const lv of ['hard', 'normal']) assert.ok([11, 13].includes(L.bestDiscard(great, true, lv).disc[0].r), lv);
+});
+test('one-card crib samples need three unknown cards and a starter', () => {
+  const U = 47, s = L.makeSamples(U, 20, 3);
+  for (const x of s) { assert.equal(x.length, 4); assert.equal(new Set(x).size, 4); assert.ok(x.every(i => i >= 0 && i < U)); }
+  assert.equal(L.makeSamples(U, 5)[0].length, 3);   // default is the two-player case
+});
+test('saved games: older saves without a mode load as two-player; modes and sizes are checked', () => {
+  const d = L.newDeck();
+  const base = (mode, n, E) => ({ v: 1, mode, scores: Array(E).fill(0), prev: Array(E).fill(0), dealer: 0, level: 'normal', target: 121,
+    muggins: false, hands: Array.from({ length: n }, (_, i) => d.slice(i * 5, i * 5 + L.handSize(n))), orig: Array.from({ length: n }, () => []),
+    crib: d.slice(40, 40 + L.cribStart(n)), starter: null, deck: d.slice(30, 36), peg: Array.from({ length: n }, () => []), pile: [], playedAll: [],
+    count: 0, stage: 'discard', showIdx: 0, pcur: 0, plast: null, pegInit: false, log: [] });
+  for (const [m, n, E] of [['2', 2, 2], ['3', 3, 3], ['4i', 4, 4], ['4t', 4, 2]]) assert.ok(L.unpackGame(base(m, n, E)), m);
+  const old = base('2', 2, 2); delete old.mode;
+  assert.equal(L.unpackGame(old).mode, '2');
+  assert.equal(L.unpackGame({ ...base('3', 3, 3), mode: 'bogus' }), null);
+  assert.equal(L.unpackGame({ ...base('3', 3, 3), scores: [0, 0] }), null);        // wrong number of scorers
+  assert.equal(L.unpackGame({ ...base('4t', 4, 2), scores: [0, 0, 0, 0] }), null);  // teams have two scores
+  assert.equal(L.unpackGame({ ...base('4i', 4, 4), dealer: 4 }), null);
+  assert.equal(L.unpackGame({ ...base('3', 3, 3), crib: [] }), null);              // the 3-player crib starts with a card
+  assert.equal(L.unpackGame({ ...base('3', 3, 3), hands: base('2', 2, 2).hands }), null);
+});
+test('stats are kept per game type; a win needs every other side under the skunk line', () => {
+  const st = L.emptyStats();
+  L.recordGame(st, { won: true, loserScore: 40, level: 'hard', target: 121, mode: '3' });
+  L.recordGame(st, { won: false, loserScore: 80, level: 'hard', target: 121, mode: '4t' });
+  L.recordGame(st, { won: true, loserScore: 100, level: 'easy', target: 121 });
+  assert.deepEqual(st.byMode['3'], { w: 1, l: 0 });
+  assert.deepEqual(st.byMode['4t'], { w: 0, l: 1 });
+  assert.deepEqual(st.byMode['2'], { w: 1, l: 0 });
+  assert.equal(st.skunksFor, 1); assert.equal(st.doubleFor, 1); assert.equal(st.skunksAgainst, 1);
+  assert.equal(L.mergeStats(JSON.parse(JSON.stringify(st))).byMode['3'].w, 1);
+  assert.equal(L.mergeStats({ games: 3 }).byMode['4i'].w, 0);   // old stats files have no byMode
+});
+async function modeGames(mode, n, extra = '') {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`settings.mode=${JSON.stringify(mode)};var results=[],shows=[];
+    gameOver=w=>{results.push({w,s:[...G.scores],mode:G.mode})};
+    showPanel=async(title,hand)=>{shows.push({title,len:hand.length,crib:G.crib.length,start:G.starter&&1})};${extra}`);
+  for (let i = 0; i < n; i++) await g.run('newGame()');
+  return { g, results: g.run('results'), shows: g.run('shows') };
+}
+for (const [mode, n, E] of [['3', 3, 3], ['4i', 4, 4], ['4t', 4, 2]]) {
+  test(`${mode}: full games finish, hands and crib are always four cards, every side can win`, async () => {
+    const { results, shows } = await modeGames(mode, 12);
+    assert.equal(results.length, 12);
+    for (const r of results) {
+      assert.equal(r.s.length, E);
+      assert.equal(Math.max(...r.s), 121);
+      assert.equal(r.s[r.w], 121);
+      assert.equal(r.s.filter(x => x >= 121).length, 1, 'one winner');
+    }
+    assert.ok(shows.length > 0 && shows.every(x => x.len === 4 && x.start));
+    assert.ok(shows.filter(x => /crib/.test(x.title)).every(x => x.crib === 4));
+    // each round counts n hands and one crib
+    assert.ok(shows.filter(x => /crib/.test(x.title)).length * n <= shows.filter(x => /hand/.test(x.title)).length + n * 12);
+  });
+}
+test('3 players: each round counts three hands and a crib; the first hand counted is left of the dealer', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`settings.mode='3';var order=[];
+    showPanel=async(title)=>{order.push([G.dealer,title]);if(order.length===4)throw{abort:true}};`);
+  await g.run('newGame()');
+  const o = g.run('order');
+  assert.equal(o.length, 4);
+  const d = o[0][0], names = ['You', 'Ann', 'Ben'];
+  const first = names[(d + 1) % 3], second = names[(d + 2) % 3];
+  const poss = n => n === 'You' ? 'Your' : n + "'s";
+  assert.equal(o[0][1], `${poss(first)} hand`);
+  assert.equal(o[1][1], `${poss(second)} hand`);
+  assert.equal(o[2][1], `${poss(names[d])} hand`);          // the dealer counts last
+  assert.equal(o[3][1], `${poss(names[d])} crib`);
+});
+test('partner game: your partner scores for your team and teams share one score', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`settings.mode='4t';cutForDeal=()=>new Promise(()=>{})`);
+  g.run('newGame()');
+  g.run('G.target=121;addScore(2,5,"test");addScore(1,3,"test");addScore(3,2,"test");addScore(0,1,"test")');
+  assert.deepEqual(g.run('G.scores'), [6, 5]);
+  assert.equal(g.run('cribMine(2)'), g.run('cribMine(0)'));        // partners share the crib
+  assert.notEqual(g.run('cribMine(1)'), g.run('cribMine(0)'));
+});
+test('three players: only the dealer owns the crib', async () => {
+  const g = loadGame();
+  g.run(`settings.mode='3';cutForDeal=()=>new Promise(()=>{})`);
+  g.run('newGame();G.dealer=1');
+  assert.deepEqual([0, 1, 2].map(s => g.run(`cribMine(${s})`)), [false, true, false]);
+});
+test('muggins in a 4 player game: the player on your left takes what you miss', async () => {
+  const g = loadGame();
+  botGame(g, 'normal', 'normal');
+  g.run(`settings.mode='4i';settings.muggins=true;var mugSeats=[];
+    askCount=async(t,h,s)=>Math.max(0,scoreHand(h,s,t.includes('crib')).total-1);
+    const oa=addScore;addScore=(p,pts,why)=>{if(why==='muggins')mugSeats.push(p);return oa(p,pts,why)};
+    gameOver=()=>{};`);
+  for (let i = 0; i < 3; i++) await g.run('newGame()');
+  const w = g.run('mugSeats');
+  assert.ok(w.length > 0 && w.every(x => x === 1));
+});
+test('resume works in every mode: saves at many points all finish', async () => {
+  for (const mode of ['3', '4i', '4t']) {
+    for (const stopAt of [1, 3, 8, 20, 45, 90]) {
+      const g1 = loadGame();
+      botGame(g1, 'normal', 'normal');
+      g1.run(`settings.mode='${mode}';var nsave=0;const os=saveGame;saveGame=()=>{os();if(++nsave===${stopAt})throw{abort:true}}`);
+      await g1.run('newGame()');
+      const saved = g1.store.get('crib-save');
+      assert.ok(saved, `${mode} save at ${stopAt}`);
+      const g2 = loadGame();
+      botGame(g2, 'normal', 'normal');
+      g2.run(`var results=[];gameOver=w=>{results.push({w,s:[...G.scores]})}`);
+      g2.store.set('crib-save', saved);
+      assert.ok(g2.run('loadSave()'), `${mode} save loads`);
+      await g2.run('newGame(loadSave())');
+      const res = g2.run('results');
+      assert.equal(res.length, 1, `${mode} resumed from ${stopAt} and finished`);
+      assert.equal(Math.max(...res[0].s), 121);
+    }
   }
 });
 test('finished games clear the saved game', async () => {

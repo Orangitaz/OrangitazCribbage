@@ -37,8 +37,8 @@ body.fast .pegc{transition-duration:.12s}
 .badge{font-size:11px;background:#0006;border-radius:10px;padding:2px 8px;margin:0 4px}
 .badge.d{background:var(--gold);color:#222;font-weight:700}
 #mid{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:92px}
-.slot{width:70px;text-align:center;font-size:11px;opacity:.9}
-#pilewrap{flex:1;text-align:center}
+.slot{flex:none;width:70px;text-align:center;font-size:11px;opacity:.9}
+#pilewrap{flex:1;min-width:0;overflow:hidden;text-align:center}
 #pile{display:flex;justify-content:center;min-height:62px}
 #pile .card{margin-left:-18px}#pile .card:first-child{margin-left:0}
 #count{font-size:22px;font-weight:800;color:var(--gold)}
@@ -111,6 +111,8 @@ body.fourc .card.s2{color:#1565c0}
 body.fourc .card.s3{color:#2e7d32}
 body.large .card{width:clamp(46px,14.4vw,72px);font-size:clamp(15px,4.8vw,22px)}
 body.large #mine{gap:clamp(1px,.4vw,3px)}
+body.large #pile{min-height:100px}
+body.large #pile .card{margin-left:-28px}body.large #pile .card:first-child{margin-left:0}
 body.large #msg{font-size:17px}
 body.large #log{font-size:14px;height:42px}
 body.large #btnrow button{font-size:18px}
@@ -125,6 +127,27 @@ body.large #btnrow button{font-size:18px}
 .home h1{margin:4px 0 0;font-size:34px;letter-spacing:1px}
 .home .tag{font-size:13px;opacity:.75}
 .gold small{display:block;font-size:12px;font-weight:600;opacity:.75;margin-top:2px}
+.row.multi{align-items:flex-start;justify-content:space-around;gap:6px}
+.opp{flex:1;min-width:0;text-align:center;padding:3px 2px;border-radius:10px;border:2px solid transparent}
+.opp.turn{border-color:var(--gold);background:#0003}
+.oname{font-size:12px;font-weight:700;margin-bottom:3px;line-height:1.5}
+.oname small{opacity:.7;font-weight:400}
+.ocards{display:flex;justify-content:center;min-height:36px}
+body .card.mini,body.large .card.mini{width:24px;border-width:1px;border-radius:4px;margin-left:-13px}
+body .card.mini:first-child{margin-left:0}
+.badge.d{margin-left:4px}
+#prog{padding:2px 2px 0}
+.prow{display:flex;align-items:center;gap:7px;margin:5px 0;font-size:14px;font-weight:700}
+.prow .dot{width:13px;height:13px;border-radius:50%;border:2px solid #fff8;flex:none}
+.prow .pn{width:74px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow b{width:34px;text-align:right;font-size:20px;font-variant-numeric:tabular-nums;flex:none}
+.ptrack{position:relative;flex:1;height:14px;background:#2a1608;border-radius:7px;overflow:hidden}
+.ptrack i{position:absolute;left:0;top:0;bottom:0;border-radius:7px;transition:width .5s ease}
+.ptrack i.pback{background:#fff6!important;transition:none}
+.ptrack u{position:absolute;top:0;bottom:0;width:2px;opacity:.9}
+.psub{font-size:11px;opacity:.75;text-align:center;margin-top:3px}
+#pop .pop.p2{border-color:#ffd54f;color:#ffe9a0}
+#pop .pop.p3{border-color:#b388ff;color:#d8c4ff}
 </style>
 </head>
 <body>
@@ -207,6 +230,7 @@ function pegPoints(pile,count){
 
 // Quick rule-of-thumb value of two discarded cards for the crib (Normal NPC).
 function cribVal(d){
+  if(d.length===1){const c=d[0];return c.r===5?1.1:val(c)===10?0.35:(c.r>=4&&c.r<=9)?0.25:0.1}   // one card (3 and 4 player games)
   const[a,b]=d;let v=0;
   if(a.r===b.r)v+=2;
   if(val(a)+val(b)===15)v+=2;
@@ -217,19 +241,22 @@ function cribVal(d){
 }
 // Hard NPC / hints: value a crib by sampling. The same random samples (two extra crib cards + a starter)
 // are used for every candidate discard, so candidates are compared fairly.
-function makeSamples(U,n){
+// m = how many other crib cards are unknown (2 in a two-player game, 3 when only one card is discarded); the last index is the starter.
+function makeSamples(U,n,m=2){
   const out=[];
   for(let k=0;k<n;k++){
-    const a=Math.floor(Math.random()*U);
-    let b;do{b=Math.floor(Math.random()*U)}while(b===a);
-    let c;do{c=Math.floor(Math.random()*U)}while(c===a||c===b);
-    out.push([a,b,c]);
+    const pick=[];
+    while(pick.length<m+1){const a=Math.floor(Math.random()*U);if(!pick.includes(a))pick.push(a)}
+    out.push(pick);
   }
   return out;
 }
 function cribAvg(disc,unseen,samples){
   let t=0;
-  for(const[a,b,c]of samples)t+=scoreHand([disc[0],disc[1],unseen[a],unseen[b]],unseen[c],true).total;
+  for(const s of samples){
+    const st=unseen[s[s.length-1]],rest=s.slice(0,-1).map(i=>unseen[i]);
+    t+=scoreHand([...disc,...rest],st,true).total;
+  }
   return t/samples.length;
 }
 // Difficulty is a dial: "skill" 0 plays in the Easy style, 0.5 in the Normal style and 1 in the Hard style;
@@ -241,18 +268,23 @@ function skillLevel(skill,rnd=Math.random()){
   if(skill<0.5)return rnd<skill*2?'normal':'easy';
   return rnd<(skill-0.5)*2?'hard':'normal';
 }
-// Choose the two cards to put in the crib. level: 'random' | 'easy' | 'normal' | 'hard'.
+// Choose the cards to put in the crib: two from six (two players) or one from five (three and four players).
+// level: 'random' | 'easy' | 'normal' | 'hard'. isDealer = the crib belongs to this player's side.
 function bestDiscard(hand,isDealer,level){
+  const K=hand.length-4;
+  const combos=[];
+  if(K===1)for(let i=0;i<hand.length;i++)combos.push([i]);
+  else for(let i=0;i<hand.length;i++)for(let j=i+1;j<hand.length;j++)combos.push([i,j]);
   if(level==='random'){
-    const i=Math.floor(Math.random()*6);let j=Math.floor(Math.random()*5);if(j>=i)j++;
-    return{disc:[hand[i],hand[j]],keep:hand.filter((_,k)=>k!==i&&k!==j),keepAvg:0,cribV:0,score:0,maxKeepAvg:0};
+    const c=combos[Math.floor(Math.random()*combos.length)];
+    return{disc:c.map(i=>hand[i]),keep:hand.filter((_,k)=>!c.includes(k)),keepAvg:0,cribV:0,score:0,maxKeepAvg:0};
   }
   const known=new Set(hand.map(key));
   const unseen=newDeck().filter(c=>!known.has(key(c)));
-  const samples=level==='hard'?makeSamples(unseen.length,150):null;
+  const samples=level==='hard'?makeSamples(unseen.length,150,4-K):null;
   let best=null,maxKeepAvg=0;
-  for(let i=0;i<6;i++)for(let j=i+1;j<6;j++){
-    const keep=hand.filter((_,k)=>k!==i&&k!==j),disc=[hand[i],hand[j]];
+  for(const c of combos){
+    const keep=hand.filter((_,k)=>!c.includes(k)),disc=c.map(i=>hand[i]);
     let t=0;for(const s of unseen)t+=scoreHand(keep,s,false).total;
     const keepAvg=t/unseen.length;
     if(keepAvg>maxKeepAvg)maxKeepAvg=keepAvg;
@@ -383,12 +415,12 @@ function explainDiscard(res,isDealer){
   let t=`Keep ${keep}: about ${res.keepAvg.toFixed(1)} points in your hand.`;
   if(res.maxKeepAvg-res.keepAvg>0.25){
     t+=isDealer
-      ?` Another pair would keep ${res.maxKeepAvg.toFixed(1)}, but these two do more for your crib (about ${res.cribV.toFixed(1)} points).`
-      :` Another pair would keep ${res.maxKeepAvg.toFixed(1)}, but these two give the NPC's crib less (about ${res.cribV.toFixed(1)} points).`;
+      ?` A different choice would keep ${res.maxKeepAvg.toFixed(1)}, but this does more for your crib (about ${res.cribV.toFixed(1)} points).`
+      :` A different choice would keep ${res.maxKeepAvg.toFixed(1)}, but this gives the other crib less (about ${res.cribV.toFixed(1)} points).`;
   }else{
     t+=isDealer
       ?` They should also add about ${res.cribV.toFixed(1)} points to your crib.`
-      :` They should give the NPC's crib only about ${res.cribV.toFixed(1)} points.`;
+      :` They should give the other crib only about ${res.cribV.toFixed(1)} points.`;
   }
   return t;
 }
@@ -406,7 +438,22 @@ function explainPlay(ranked,pile,count){
 // ---- rule options ----
 // Skunk lines: a full game (121) has a skunk below 91 and a double skunk below 61; a short game (61) has a skunk below 31.
 // Cutting for the first deal: the lower card deals (ace is low, suits do not matter). null = tie, cut again.
-function cutDealer(mine,npc){return mine.r===npc.r?null:(mine.r<npc.r?0:1)}
+function cutLowest(cards){
+  const m=Math.min(...cards.map(c=>c.r)),idx=[];
+  cards.forEach((c,i)=>{if(c.r===m)idx.push(i)});
+  return idx.length===1?idx[0]:null;
+}
+function cutDealer(mine,npc){return cutLowest([mine,npc])}
+// ---- game modes: 2 players, 3 players, 4 players on their own, 4 players as two teams (you sit opposite your partner) ----
+// n = seats at the table (seat 0 is you, seats go clockwise); ents = who scores (a player, or a team).
+const MODES={'2':{n:2,ents:2,team:false},'3':{n:3,ents:3,team:false},'4i':{n:4,ents:4,team:false},'4t':{n:4,ents:2,team:true}};
+const isMode=m=>Object.prototype.hasOwnProperty.call(MODES,m);
+const entOf=(mode,seat)=>MODES[mode].team?seat%2:seat;
+const handSize=n=>n===2?6:5;     // cards dealt to each player
+const cribStart=n=>n===3?1:0;    // the three-player crib starts with one card from the deck
+const SEAT_NAMES={'2':['You','NPC'],'3':['You','Ann','Ben'],'4i':['You','Ann','Ben','Cy'],'4t':['You','Ann','Ben','Cy']};
+const ENT_NAMES={'2':['You','NPC'],'3':['You','Ann','Ben'],'4i':['You','Ann','Ben','Cy'],'4t':['Your team','Opponents']};
+const MODE_LABEL={'2':'NPC','3':'3 players','4i':'4 players','4t':'Partners'};
 function skunkKind(loserScore,target){
   if(target===61)return loserScore<31?'skunk':null;
   if(loserScore<61)return 'double';
@@ -430,7 +477,8 @@ function cmpVer(a,b){
 function emptyStats(){
   return{games:0,w:0,l:0,streak:0,bestStreak:0,skunksFor:0,doubleFor:0,skunksAgainst:0,doubleAgainst:0,
     handN:0,handSum:0,bestHand:0,cribN:0,cribSum:0,bestCrib:0,
-    byDiff:{easy:{w:0,l:0},normal:{w:0,l:0},hard:{w:0,l:0}}};
+    byDiff:{easy:{w:0,l:0},normal:{w:0,l:0},hard:{w:0,l:0}},
+    byMode:{'2':{w:0,l:0},'3':{w:0,l:0},'4i':{w:0,l:0},'4t':{w:0,l:0}}};
 }
 function mergeStats(raw){
   const d=emptyStats();
@@ -440,6 +488,11 @@ function mergeStats(raw){
       for(const l of['easy','normal','hard']){
         const r=raw.byDiff&&raw.byDiff[l];
         if(r){d.byDiff[l].w=+r.w||0;d.byDiff[l].l=+r.l||0}
+      }
+    }else if(k==='byMode'){
+      for(const m of Object.keys(d.byMode)){
+        const r=raw.byMode&&raw.byMode[m];
+        if(r){d.byMode[m].w=+r.w||0;d.byMode[m].l=+r.l||0}
       }
     }else if(typeof raw[k]==='number'&&isFinite(raw[k]))d[k]=raw[k];
   }
@@ -452,13 +505,14 @@ function recordHand(st,pts,isCrib){
 function recordGame(st,g){
   st.games++;
   const d=st.byDiff[g.level]||(st.byDiff[g.level]={w:0,l:0});
+  const m=st.byMode[g.mode||'2']||(st.byMode[g.mode||'2']={w:0,l:0});
   if(g.won){
-    st.w++;d.w++;st.streak++;st.bestStreak=Math.max(st.bestStreak,st.streak);
+    st.w++;d.w++;m.w++;st.streak++;st.bestStreak=Math.max(st.bestStreak,st.streak);
     const k=skunkKind(g.loserScore,g.target||121);
     if(k)st.skunksFor++;
     if(k==='double')st.doubleFor++;
   }else{
-    st.l++;d.l++;st.streak=0;
+    st.l++;d.l++;m.l++;st.streak=0;
     const k=skunkKind(g.loserScore,g.target||121);
     if(k)st.skunksAgainst++;
     if(k==='double')st.doubleAgainst++;
@@ -472,7 +526,7 @@ function pegCell(score,target=121){
   return{band:Math.floor((score-1)/30),col:(score-1)%30};
 }
 // ---- saved game ----
-const SAVE_KEYS=['scores','prev','dealer','level','target','muggins','hands','orig','crib','starter','deck','peg','pile',
+const SAVE_KEYS=['mode','scores','prev','dealer','level','target','muggins','hands','orig','crib','starter','deck','peg','pile',
   'playedAll','count','stage','showIdx','pcur','plast','pegInit','log'];
 const isCard=c=>!!c&&Number.isInteger(c.r)&&c.r>=1&&c.r<=13&&Number.isInteger(c.s)&&c.s>=0&&c.s<=3;
 const isCards=a=>Array.isArray(a)&&a.length<=52&&a.every(isCard);
@@ -485,22 +539,26 @@ function packGame(g){
 function unpackGame(o){
   try{
     if(!o||o.v!==1)return null;
-    const two=a=>Array.isArray(a)&&a.length===2;
-    if(!two(o.scores)||!two(o.prev)||!o.scores.every(Number.isFinite)||!o.prev.every(Number.isFinite))return null;
-    if(o.dealer!==0&&o.dealer!==1)return null;
+    const mode=o.mode===undefined?'2':o.mode;           // saves from before 3 and 4 player games have no mode
+    if(!isMode(mode))return null;
+    const n=MODES[mode].n,E=MODES[mode].ents,hs=handSize(n);
+    const arr=(a,len)=>Array.isArray(a)&&a.length===len;
+    if(!arr(o.scores,E)||!arr(o.prev,E)||!o.scores.every(Number.isFinite)||!o.prev.every(Number.isFinite))return null;
+    const seat=x=>Number.isInteger(x)&&x>=0&&x<n;
+    if(!seat(o.dealer))return null;
     if(!['easy','normal','hard'].includes(o.level)||(o.target!==121&&o.target!==61))return null;
     if(!['discard','peg','show','next'].includes(o.stage))return null;
-    if(o.stage==='discard'&&!(o.hands.length===2&&o.hands[0].length===6&&o.hands[1].length===6))return null;
-    if(!two(o.hands)||!o.hands.every(isCards)||!two(o.orig)||!o.orig.every(isCards)||!two(o.peg)||!o.peg.every(isCards))return null;
+    if(!arr(o.hands,n)||!o.hands.every(isCards)||!arr(o.orig,n)||!o.orig.every(isCards)||!arr(o.peg,n)||!o.peg.every(isCards))return null;
+    if(o.stage==='discard'&&!(o.hands.every(h=>h.length===hs)&&o.crib.length===cribStart(n)))return null;
     if(!isCards(o.crib)||!isCards(o.deck)||!isCards(o.pile)||!isCards(o.playedAll))return null;
     if(o.starter!==null&&!isCard(o.starter))return null;
-    if(!Number.isInteger(o.count)||o.count<0||o.count>31||!Number.isInteger(o.showIdx)||o.showIdx<0||o.showIdx>3)return null;
-    if(o.pcur!==0&&o.pcur!==1)return null;
-    if(o.plast!==null&&o.plast!==0&&o.plast!==1)return null;
+    if(!Number.isInteger(o.count)||o.count<0||o.count>31||!Number.isInteger(o.showIdx)||o.showIdx<0||o.showIdx>n+1)return null;
+    if(!seat(o.pcur))return null;
+    if(o.plast!==null&&!seat(o.plast))return null;
     if(o.stage==='peg'&&o.pegInit&&!o.starter)return null;
     if(Math.max(...o.scores)>=o.target)return null;
     const c=JSON.parse(JSON.stringify(o));
-    c.muggins=!!o.muggins;c.pegInit=!!o.pegInit;
+    c.mode=mode;c.muggins=!!o.muggins;c.pegInit=!!o.pegInit;
     c.log=Array.isArray(o.log)?o.log.filter(x=>typeof x==='string').slice(-2):[];
     return c;
   }catch(e){return null}
@@ -512,19 +570,39 @@ const $=id=>document.getElementById(id);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
 const fmt=cs;
-const who=p=>p?'NPC':'You';
 let G=null,GEN=0,undoTimer=null,leaveOpen=false;
+// seats and sides of the game in progress (seat 0 is you; in the partner game seat 2 is your partner)
+const NS=()=>MODES[G.mode].n;
+const nm=s=>SEAT_NAMES[G.mode][s];
+const who=nm;
+const entNm=e=>ENT_NAMES[G.mode][e];
+const ent=s=>entOf(G.mode,s);
+const nextSeat=s=>(s+1)%NS();
+const cribMine=s=>ent(s)===ent(G.dealer);           // does the crib belong to this seat's side?
+const isPartner=s=>MODES[G.mode].team&&s!==0&&ent(s)===0;
+const poss=s=>s===0?'Your':nm(s)+"'s";
+function cribOwner(){                                 // 'your', "Ann's", "your partner's"
+  if(G.dealer===0)return 'your';
+  return isPartner(G.dealer)?"your partner's":nm(G.dealer)+"'s";
+}
+// cards held by the next opponent (the one our lookahead guesses for), used by the NPC and the hints
+function oppLeftFor(seat){
+  for(let k=1;k<NS();k++){const o=(seat+k)%NS();if(ent(o)!==ent(seat)&&G.peg[o].length)return G.peg[o].length}
+  return 0;
+}
+const blankSeats=n=>Array.from({length:n},()=>[]);
 // The Android app injects AndroidBridge (vibration, keep-screen-on, exit); in a browser it does not exist.
 const bridge=()=>typeof AndroidBridge!=='undefined'?AndroidBridge:null;
 
 /* settings + stats storage */
-const DEFAULTS={level:'normal',target:121,muggins:false,fast:false,sound:true,haptics:true,keepAwake:true,fourColor:false,large:false};
+const DEFAULTS={mode:'2',level:'normal',target:121,muggins:false,fast:false,sound:true,haptics:true,keepAwake:true,fourColor:false,large:false};
 function loadSettings(){
   const d={...DEFAULTS};
   try{
     const s=JSON.parse(localStorage.getItem('crib-settings'))||{};
     if(['easy','normal','hard'].includes(s.level))d.level=s.level;
     if(s.target===61||s.target===121)d.target=s.target;
+    if(isMode(s.mode))d.mode=s.mode;
     for(const k of['muggins','fast','sound','haptics','keepAwake','fourColor','large'])if(typeof s[k]==='boolean')d[k]=s[k];
   }catch(e){}
   return d;
@@ -607,7 +685,7 @@ const backEl=()=>'<div class="card back"></div>';
 
 function status(t){$('msg').textContent=t}
 function log(t){G.log.push(t);if(G.log.length>2)G.log.shift();$('log').innerHTML=G.log.map(x=>`<div>${x}</div>`).join('')}
-function popup(p,pts,why){const e=$('pop');if(e)e.innerHTML=`<span class="pop p${p}">${who(p)} +${pts}${why?` · ${esc(why)}`:''}</span>`}
+function popup(seat,pts,why){const e=$('pop');if(e)e.innerHTML=`<span class="pop p${ent(seat)}">${nm(seat)} +${pts}${why?` · ${esc(why)}`:''}</span>`}
 
 /* ---------- board ---------- */
 // Bands of 30 holes, read left to right like text. Each band has an NPC lane (top) and a player lane (bottom).
@@ -616,7 +694,7 @@ const BX0=24,PITCH=10,GAP=5,BAND_H=40,TOP=4;
 const holeX=c=>BX0+c*PITCH+Math.floor(c/5)*GAP;
 const LANE_Y={1:11,0:29};                 // offset inside a band: NPC lane, player lane
 const START_X=9,HOME_X=BX0+29*PITCH+5*GAP+16;
-const PCOL={0:'#4fc3f7',1:'#ff4d6d'};
+const PCOL={0:'#4fc3f7',1:'#ff4d6d',2:'#ffd54f',3:'#b388ff'};
 const bandsFor=t=>t===61?2:4;
 function pegPos(p,score){
   const c=pegCell(score,G.target);
@@ -624,7 +702,17 @@ function pegPos(p,score){
   if(c.home)return{x:HOME_X,y:TOP+(bandsFor(G.target)-1)*BAND_H+LANE_Y[p]};
   return{x:holeX(c.col),y:TOP+c.band*BAND_H+LANE_Y[p]};
 }
+// Three or four scorers get a simple progress board (one bar each); two scorers get the cribbage board.
+function initProgress(){
+  const T=G.target,E=MODES[G.mode].ents;
+  const marks=(T===121?[[61,'#e0805f'],[91,'#e8c35a']]:[[31,'#e8c35a']]).map(([v,c])=>`<u style="left:${100*v/T}%;background:${c}"></u>`).join('');
+  let h='<div id="prog">';
+  for(let e=0;e<E;e++)h+=`<div class="prow"><span class="dot" style="background:${PCOL[e]}"></span><span class="pn">${esc(entNm(e))}</span><div class="ptrack"><i id="pf${e}" style="background:${PCOL[e]}"></i><i id="pb${e}" class="pback"></i>${marks}</div><b id="sc${e}">0</b></div>`;
+  h+=`<div class="psub">first to ${T}${T===121?' · lines mark 61 and 91':' · line marks 31'}</div></div>`;
+  $('board').innerHTML=h;
+}
 function initBoard(){
+  if(MODES[G.mode].ents>2)return initProgress();
   const T=G.target,NB=bandsFor(T),W=360,H=TOP*2+NB*BAND_H;
   let h=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Cribbage board"><rect width="${W}" height="${H}" rx="8" fill="#8a5a2e"/>`;
   for(let b=0;b<NB;b++){
@@ -656,13 +744,22 @@ function initBoard(){
   for(const p of[1,0])for(const k of['b','f'])
     h+=`<circle id="peg${p}${k}" class="pegc" cx="0" cy="0" r="${k==='f'?5:3.6}" fill="${PCOL[p]}" stroke="#fff" stroke-width="${k==='f'?1.8:1.1}" style="transform:translate(${START_X}px,${TOP+LANE_Y[p]}px)"/>`;
   $('board').innerHTML=`<div id="scorebar">
-      <span class="sc"><span class="dot" style="background:${PCOL[1]}"></span>NPC <b id="sc1">0</b></span>
+      <span class="sc"><span class="dot" style="background:${PCOL[1]}"></span>${esc(entNm(1))} <b id="sc1">0</b></span>
       <span class="sc"><small>first to ${T}</small></span>
-      <span class="sc"><span class="dot" style="background:${PCOL[0]}"></span>You <b id="sc0">0</b></span>
+      <span class="sc"><span class="dot" style="background:${PCOL[0]}"></span>${esc(entNm(0))} <b id="sc0">0</b></span>
     </div>`+h+'</svg>';
 }
 function renderBoard(){
   if(!G)return;
+  if(MODES[G.mode].ents>2){
+    for(let e=0;e<MODES[G.mode].ents;e++){
+      const f=$('pf'+e),b=$('pb'+e),n=$('sc'+e);
+      if(f)f.style.width=(100*G.scores[e]/G.target)+'%';
+      if(b){const lo=100*G.prev[e]/G.target,hi=100*G.scores[e]/G.target;b.style.left=lo+'%';b.style.width=Math.max(0,hi-lo)+'%'}
+      if(n)n.textContent=G.scores[e];
+    }
+    return;
+  }
   for(const p of[0,1]){
     for(const k of['f','b']){
       const sc=k==='f'?G.scores[p]:G.prev[p],pos=pegPos(p,sc),e=$('peg'+p+k);
@@ -674,13 +771,21 @@ function renderBoard(){
 
 /* ---------- main render ---------- */
 function render(){
-  $('lvl').textContent=`NPC: ${cap(G.level)}${G.target===61?' · to 61':''}${G.muggins?' · muggins':''}`;
+  $('lvl').textContent=`${MODE_LABEL[G.mode]}: ${cap(G.level)}${G.target===61?' · to 61':''}${G.muggins?' · muggins':''}`;
   renderBoard();
-  const dealerBadge=p=>G.dealer===p?'<span class="badge d">Dealer</span>':'';
-  const n=G.phase==='peg'?G.peg[1].length:((G.phase==='discard'||G.phase==='confirm')?6:0);
-  $('npc').innerHTML=(n?Array.from({length:n},backEl).join(''):'<span style="opacity:.6;font-size:13px">NPC</span>')+dealerBadge(1);
+  const N=NS(),big=N===2;
+  const nCards=sd=>G.phase==='peg'?G.peg[sd].length:((G.phase==='discard'||G.phase==='confirm'||G.phase==='cut')?G.hands[sd].length:0);
+  let opp='';
+  for(let sd=1;sd<N;sd++){
+    const n=nCards(sd),badge=G.dealer===sd?'<span class="badge d">Dealer</span>':'';
+    if(big){opp+=(n?Array.from({length:n},backEl).join(''):'<span style="opacity:.6;font-size:13px">NPC</span>')+badge;continue}
+    const cls=`opp${G.phase==='peg'&&G.turn===sd?' turn':''}`;
+    opp+=`<div class="${cls}"><div class="oname">${esc(nm(sd))}${isPartner(sd)?' <small>partner</small>':''}${badge}</div><div class="ocards">${Array.from({length:n},()=>'<div class="card back mini"></div>').join('')}</div></div>`;
+  }
+  $('npc').className=big?'row':'row multi';
+  $('npc').innerHTML=opp;
   $('starter').innerHTML=G.starter?`<div style="margin-bottom:2px">Starter</div>${cardEl(G.starter)}`:'';
-  $('cribinfo').innerHTML=`Crib<br><b>${G.crib.length}</b> cards<br>${G.dealer===0?'yours':"NPC's"}`;
+  $('cribinfo').innerHTML=`Crib<br><b>${G.crib.length}</b> cards<br>${G.dealer===0?'yours':isPartner(G.dealer)?'your partner’s':(big?"NPC's":nm(G.dealer)+"’s")}${N>2&&G.dealer===0?'<br><small>you deal</small>':''}`;
   $('pile').innerHTML=G.pile.map(c=>cardEl(c)).join('');
   $('count').textContent=G.phase==='peg'?`Count: ${G.count}`:'';
   const hint=i=>G.hint&&G.hint.has(i)?'hint':'';
@@ -692,8 +797,8 @@ function render(){
       return cardEl(c,`${ok?'ok':'dim'} ${hint(i)}`,i);
     }).join('');
   }else $('mine').innerHTML='';
-  const b=$('btn'),b2=$('btn2');
-  if(G.phase==='discard'){b.className='';b.textContent='Send to crib';b.disabled=G.sel.size!==2;b2.className='alt'}
+  const b=$('btn'),b2=$('btn2'),K=G.hands[0].length-4;
+  if(G.phase==='discard'){b.className='';b.textContent='Send to crib';b.disabled=G.sel.size!==K;b2.className='alt'}
   else if(G.phase==='confirm'){b.className='';b.textContent=`Undo (${G.undoN})`;b.disabled=false;b2.className='alt hide'}
   else if(G.phase==='peg'&&G.turn===0){b.className='hide';b2.className='alt'}
   else{b.className='hide';b2.className='alt hide'}
@@ -706,13 +811,15 @@ $('mine').addEventListener('click',e=>{
 $('btn').addEventListener('click',()=>{if(G&&G.onBtn)G.onBtn()});
 $('btn2').addEventListener('click',()=>{if(G)showHint()});
 
-function addScore(p,pts,why){
+// seat = who scored; the points go to that seat's side (a team in the partner game)
+function addScore(seat,pts,why){
   if(!pts)return;
-  G.prev[p]=G.scores[p];G.scores[p]=Math.min(G.target,G.scores[p]+pts);
-  log(`${who(p)} +${pts} — ${why}`);
-  renderBoard();popup(p,pts,why);
-  if(p===0){sfx('score',pts);buzz(Math.min(25+pts*8,110))}else sfx('npcscore');
-  if(G.scores[p]>=G.target)throw{win:p};
+  const e=ent(seat);
+  G.prev[e]=G.scores[e];G.scores[e]=Math.min(G.target,G.scores[e]+pts);
+  log(`${nm(seat)} +${pts} — ${why}`);
+  renderBoard();popup(seat,pts,why);
+  if(seat===0){sfx('score',pts);buzz(Math.min(25+pts*8,110))}else sfx('npcscore');
+  if(G.scores[e]>=G.target)throw{win:e};
 }
 
 /* ---------- hints ---------- */
@@ -722,14 +829,14 @@ function unseenFor(p){
 }
 function showHint(){
   if(G.phase==='discard'){
-    const h=bestDiscard(G.hands[0],G.dealer===0,'hard');
+    const h=bestDiscard(G.hands[0],cribMine(0),'hard');
     G.hint=new Set(h.disc.map(c=>G.hands[0].indexOf(c)));
-    status(`Hint: send ${fmt(h.disc[0])} and ${fmt(h.disc[1])}. ${explainDiscard(h,G.dealer===0)}`);
+    status(`Hint: send ${h.disc.map(fmt).join(' and ')}. ${explainDiscard(h,cribMine(0))}`);
     render();
   }else if(G.phase==='peg'&&G.turn===0){
     const pl=G.peg[0].filter(c=>G.count+val(c)<=31);
     if(!pl.length)return;
-    const o={playable:pl,pile:G.pile,count:G.count,level:'hard',unseen:unseenFor(0),oppLeft:G.peg[1].length,myHand:G.peg[0],det:true};
+    const o={playable:pl,pile:G.pile,count:G.count,level:'hard',unseen:unseenFor(0),oppLeft:oppLeftFor(0),myHand:G.peg[0],det:true};
     const rk=rankPlays(o),c=rk?rk[0].c:choosePlay(o);
     const p=pegPoints([...G.pile,c],G.count+val(c)).pts;
     G.hint=new Set([G.peg[0].indexOf(c)]);
@@ -742,8 +849,8 @@ function showHint(){
 /* ---------- player input ---------- */
 function humanDiscard(){
   return new Promise(res=>{
-    G.onCard=i=>{G.hint=null;if(G.sel.has(i))G.sel.delete(i);else if(G.sel.size<2)G.sel.add(i);render()};
-    G.onBtn=()=>{if(G.sel.size===2){G.onCard=G.onBtn=null;G.hint=null;res([...G.sel])}};
+    G.onCard=i=>{G.hint=null;if(G.sel.has(i))G.sel.delete(i);else if(G.sel.size<G.hands[0].length-4)G.sel.add(i);render()};
+    G.onBtn=()=>{if(G.sel.size===G.hands[0].length-4){G.onCard=G.onBtn=null;G.hint=null;res([...G.sel])}};
   });
 }
 function humanPlay(){
@@ -767,7 +874,7 @@ function showPanel(title,hand,starter,r,claim){
     let note='';
     if(claim!==null&&claim!==undefined){
       const o=resolveClaim(claim,r.total);
-      note=o.npc?`<p class="mug">You counted ${claim}, but it is worth ${r.total}. Muggins! The NPC takes ${o.npc}.</p>`
+      note=o.npc?`<p class="mug">You counted ${claim}, but it is worth ${r.total}. Muggins! ${nm(nextSeat(0))} takes ${o.npc}.</p>`
         :o.over?`<p>You counted ${claim}, but it is only worth ${r.total}, so you score ${r.total}.</p>`
         :`<p>Spot on: ${r.total}!</p>`;
     }
@@ -786,7 +893,7 @@ function askCount(title,hand,starter){
     $('panel').innerHTML=`<h2>${title}: count it yourself</h2>
       <div class="cards">${hand.map(c=>cardEl(c)).join('')}<span class="sep"></span>${cardEl(starter)}</div>
       <div class="stepper"><button data-d="-5">−5</button><button data-d="-1">−1</button><b id="cnt">0</b><button data-d="1">+1</button><button data-d="5">+5</button></div>
-      <p class="sub">Count carefully: the NPC takes any points you miss.</p>
+      <p class="sub">Count carefully: the next player takes any points you miss.</p>
       <button class="gold" id="cntOk">Score it</button>`;
     $('ov').classList.add('on');
     $('panel').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{
@@ -801,23 +908,28 @@ function askCount(title,hand,starter){
 
 /* ---------- game flow ---------- */
 // Resumable: all the state it needs lives in G (pegInit, pcur, plast) and is saved after every move.
+// Play goes clockwise from the player after the dealer; a player with no cards is skipped, and when nobody can play
+// the last player to play scores 1 for "go" and the count starts again.
 async function pegging(A){
+  const N=NS();
   if(!G.pegInit){
-    G.peg=[G.hands[0].slice(),G.hands[1].slice()];
-    G.pile=[];G.count=0;G.playedAll=[];G.pcur=1-G.dealer;G.plast=null;G.pegInit=true;
+    G.peg=G.hands.map(h=>h.slice());
+    G.pile=[];G.count=0;G.playedAll=[];G.pcur=nextSeat(G.dealer);G.plast=null;G.pegInit=true;
   }
   G.phase='peg';
-  const left=()=>G.peg[0].length+G.peg[1].length;
+  const left=()=>G.peg.reduce((n,h)=>n+h.length,0);
   const canPlay=p=>G.peg[p].filter(c=>G.count+val(c)<=31);
+  const othersCanPlay=cur=>{for(let k=1;k<N;k++)if(canPlay((cur+k)%N).length)return true;return false};
   while(left()>0){
     const cur=G.pcur;
     G.turn=cur;
+    if(!G.peg[cur].length){G.pcur=nextSeat(cur);continue}      // out of cards: skipped
     const pl=canPlay(cur);
     if(pl.length){
       let c;
-      if(cur===1){
-        status('NPC is thinking…');render();await A(pause(900));
-        c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:npcLvl(),unseen:unseenFor(1),oppLeft:G.peg[0].length,myHand:G.peg[1]});
+      if(cur!==0){
+        status(`${nm(cur)} is thinking…`);render();await A(pause(900));
+        c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:npcLvl(),unseen:unseenFor(cur),oppLeft:oppLeftFor(cur),myHand:G.peg[cur]});
       }else{status(`Your play — count is ${G.count}`);render();c=await A(humanPlay())}
       G.peg[cur]=G.peg[cur].filter(x=>x!==c);
       G.pile.push(c);G.playedAll.push(c);G.count+=val(c);
@@ -825,18 +937,18 @@ async function pegging(A){
       render();
       const r=pegPoints(G.pile,G.count);
       if(r.pts)addScore(cur,r.pts,r.notes.join(', '));
-      G.plast=cur;G.pcur=1-cur;
+      G.plast=cur;G.pcur=nextSeat(cur);
       if(G.count===31){
         // keep the pile on the table after the very last card so it can be seen before counting
         G.plast=null;   // 31 is already scored, so there is no "go" point to give if the game is resumed here
         if(left()>0){await A(pause(800));G.pile=[];G.count=0}
       }else if(left()===0){addScore(cur,1,'last card')}
-    }else if(canPlay(1-cur).length){
-      log(`${who(cur)}: Go`);status(`${who(cur)} say${cur?'s':''} "Go"`);render();sfx('go');await A(pause(900));G.pcur=1-cur;
+    }else if(othersCanPlay(cur)){
+      log(`${nm(cur)}: Go`);status(cur===0?'You say "Go"':`${nm(cur)} says "Go"`);render();sfx('go');await A(pause(900));G.pcur=nextSeat(cur);
     }else{
       await A(pause(700));
       if(G.plast!==null)addScore(G.plast,1,'go');
-      G.pcur=G.plast!==null?1-G.plast:cur;
+      G.pcur=nextSeat(G.plast!==null?G.plast:cur);
       G.pile=[];G.count=0;G.plast=null;render();
     }
     saveGame();
@@ -846,35 +958,42 @@ async function pegging(A){
   status('That was the last card — time to count');render();await A(pause(1800));
 }
 
-const discardMsg=()=>`${G.dealer?'NPC deals':'You deal'} — choose 2 cards for ${G.dealer?"NPC's":'your'} crib`;
+const discardMsg=()=>{
+  const K=G.hands[0].length-4;
+  return `${G.dealer===0?'You deal':nm(G.dealer)+' deals'} — choose ${K} card${K>1?'s':''} for ${cribOwner()} crib`;
+};
 async function round(A,resume){
+  const N=NS();
   if(!resume){
-    const d=shuffle(newDeck()),dealer=G.dealer,pone=1-dealer;
-    G.hands=[[],[]];
-    for(let i=0;i<6;i++){G.hands[pone].push(d.pop());G.hands[dealer].push(d.pop())}
+    const d=shuffle(newDeck()),dealer=G.dealer,hs=handSize(N);
+    G.hands=blankSeats(N);
+    for(let i=0;i<hs;i++)for(let k=1;k<=N;k++)G.hands[(dealer+k)%N].push(d.pop());
     G.hands.forEach(h=>h.sort(cmp));
-    G.orig=[G.hands[0].slice(),G.hands[1].slice()];
+    G.orig=G.hands.map(h=>h.slice());
+    G.crib=[];for(let i=0;i<cribStart(N);i++)G.crib.push(d.pop());
     G.deck=d;
-    G.crib=[];G.starter=null;G.pile=[];G.count=0;G.peg=[[],[]];G.playedAll=[];G.turn=null;
+    G.starter=null;G.pile=[];G.count=0;G.peg=blankSeats(N);G.playedAll=[];G.turn=null;
     G.pegInit=false;G.pcur=0;G.plast=null;G.showIdx=0;G.stage='discard';
   }
   G.sel=new Set();G.hint=null;
-  const dealer=G.dealer,pone=1-dealer;
+  const dealer=G.dealer;
   if(G.stage==='discard'){
     G.phase='discard';status(discardMsg());render();saveGame();
-    const npcD=bestDiscard(G.hands[1],dealer===1,npcLvl()).disc;
+    const npcD=[];
+    for(let sd=1;sd<N;sd++)npcD[sd]=bestDiscard(G.hands[sd],cribMine(sd),npcLvl()).disc;
     let idx;
     while(true){
       idx=await A(humanDiscard());
       G.phase='confirm';
-      status(`Sending ${idx.map(i=>fmt(G.hands[0][i])).join(' and ')} to ${dealer?"NPC's":'your'} crib…`);
+      status(`Sending ${idx.map(i=>fmt(G.hands[0][i])).join(' and ')} to ${cribOwner()} crib…`);
       if(await A(undoWindow()))break;
       G.phase='discard';status(discardMsg());render();
     }
     const mineD=idx.map(i=>G.hands[0][i]);
     G.hands[0]=G.hands[0].filter(c=>!mineD.includes(c));
-    G.hands[1]=G.hands[1].filter(c=>!npcD.includes(c));
-    G.crib=[...mineD,...npcD];
+    const crib=[...G.crib,...mineD];
+    for(let sd=1;sd<N;sd++){G.hands[sd]=G.hands[sd].filter(c=>!npcD[sd].includes(c));crib.push(...npcD[sd])}
+    G.crib=crib;
     G.noSave=true;   // between discarding and the cut the state is half-way; no checkpoint until the starter is out
     G.phase='cut';status('Cutting the deck…');render();await A(pause(900));
     G.starter=G.deck.pop();render();
@@ -888,37 +1007,44 @@ async function round(A,resume){
   }
   if(G.stage==='show'){
     G.phase='show';G.pile=[];G.count=0;render();
-    const order=[[pone,G.hands[pone],'hand'],[dealer,G.hands[dealer],'hand'],[dealer,G.crib,'crib']];
-    for(let i=G.showIdx;i<3;i++){
-      const[p,h,kind]=order[i];
+    // hands are counted clockwise from the player after the dealer, the dealer last, then the crib
+    const order=[];
+    for(let k=1;k<=N;k++){const sd=(dealer+k)%N;order.push([sd,G.hands[sd],'hand'])}
+    order.push([dealer,G.crib,'crib']);
+    for(let i=G.showIdx;i<order.length;i++){
+      const[sd,h,kind]=order[i];
       const r=scoreHand(h,G.starter,kind==='crib');
-      const title=kind==='crib'?`${p?"NPC's":'Your'} crib`:`${p?"NPC's":'Your'} hand`;
+      const title=kind==='crib'?`${poss(sd)} crib`:`${poss(sd)} hand`;
       status(title);
-      if(p===0){recordHand(stats,r.total,kind==='crib');saveStats()}
+      if(sd===0){recordHand(stats,r.total,kind==='crib');saveStats()}
       let claim=null;
-      if(G.muggins&&p===0)claim=await A(askCount(title,h,G.starter));
+      if(G.muggins&&sd===0)claim=await A(askCount(title,h,G.starter));
       await A(showPanel(title,h,G.starter,r,claim));
-      if(claim===null)addScore(p,r.total,title);
+      if(claim===null)addScore(sd,r.total,title);
       else{
         const o=resolveClaim(claim,r.total);
         addScore(0,o.me,title);
-        if(o.npc)addScore(1,o.npc,'muggins');
+        if(o.npc)addScore(nextSeat(0),o.npc,'muggins');
       }
       G.showIdx=i+1;saveGame();
     }
-    G.dealer=1-G.dealer;G.stage='next';saveGame();
+    G.dealer=nextSeat(G.dealer);G.stage='next';saveGame();
   }
 }
 
 function gameOver(w){
-  const loser=G.scores[1-w],k=skunkKind(loser,G.target);
-  recordGame(stats,{won:w===0,loserScore:loser,level:G.level,target:G.target});saveStats();
+  // skunk: when you win, every other side is below the line; when you lose, your side is
+  const E=MODES[G.mode].ents;
+  const loser=w===0?Math.max(...G.scores.filter((_,e)=>e!==0)):G.scores[0],k=skunkKind(loser,G.target);
+  recordGame(stats,{won:w===0,loserScore:loser,level:G.level,target:G.target,mode:G.mode});saveStats();
   clearSave();
   const skunk=k==='double'?' — double skunk!':k==='skunk'?' — skunk!':'';
   G.phase='over';G.onCard=G.onBtn=null;render();
   sfx(w===0?'win':'lose');buzz(w===0?220:90);
-  $('panel').innerHTML=`<h2>${w===0?'You win! 🎉':'NPC wins'}${skunk}</h2>
-    <p>Final score: You ${G.scores[0]} – NPC ${G.scores[1]}</p>
+  const team=MODES[G.mode].team,wn=entNm(w);
+  const head=w===0?(team?'Your team wins! 🎉':'You win! 🎉'):(team?`${wn} win`:`${wn} wins`);
+  $('panel').innerHTML=`<h2>${head}${skunk}</h2>
+    <p>Final score: ${G.scores.map((x,e)=>`${esc(entNm(e))} ${x}`).join(' – ')}</p>
     <p style="opacity:.8">Record: ${stats.w} wins, ${stats.l} losses</p>
     <button class="gold" id="again">Play again</button>
     <button class="opt" id="goStats">View stats</button>`;
@@ -933,7 +1059,8 @@ async function newGame(saved){
   $('ov').classList.remove('on');$('ov2').classList.remove('on');
   // Every await goes through A so a game that was abandoned stops quietly.
   const A=async p=>{const v=await p;if(gen!==GEN)throw{abort:true};return v};
-  const fresh={scores:[0,0],prev:[0,0],dealer:0,log:[],hands:[[],[]],orig:[[],[]],crib:[],peg:[[],[]],pile:[],
+  const md=saved&&saved.mode?saved.mode:settings.mode,nn=MODES[md].n,ee=MODES[md].ents;
+  const fresh={mode:md,scores:Array(ee).fill(0),prev:Array(ee).fill(0),dealer:0,log:[],hands:blankSeats(nn),orig:blankSeats(nn),crib:[],peg:blankSeats(nn),pile:[],
     playedAll:[],deck:[],count:0,starter:null,stage:'discard',showIdx:0,pcur:0,plast:null,pegInit:false,
     level:settings.level,target:settings.target,muggins:settings.muggins};
   G={...fresh,...(saved||{}),sel:new Set(),hint:null,phase:'start',turn:null};
@@ -950,22 +1077,22 @@ async function newGame(saved){
     else{console.error(e);throw e}
   }
 }
-// Cut for the first deal: pick one of the face-down cards, the NPC cuts another, the lower card deals.
+// Cut for the first deal: pick one of the face-down cards, everyone else cuts one too, the lowest card deals.
 function cutForDeal(){
   return new Promise(res=>{
-    const N=12;
+    const N=NS(),CARDS=12;
     const round=()=>{
-      const d=shuffle(newDeck()),mine=d[0],npcC=d[1];
+      const cards=shuffle(newDeck()).slice(0,N);          // cards[seat]: yours is cards[0]
       $('panel').innerHTML=`<h2>Cut for the first deal</h2>
-        <p>Pick a card. The lower card deals first.</p>
-        <div class="fan">${Array.from({length:N},(_,i)=>`<button class="cutc" data-i="${i}" aria-label="Card ${i+1}"></button>`).join('')}</div>`;
+        <p>Pick a card. The lowest card deals first.</p>
+        <div class="fan">${Array.from({length:CARDS},(_,i)=>`<button class="cutc" data-i="${i}" aria-label="Card ${i+1}"></button>`).join('')}</div>`;
       $('ov').classList.add('on');
       $('panel').querySelectorAll('.cutc').forEach(b=>b.onclick=()=>{
-        const w=cutDealer(mine,npcC);
-        const result=w===null?'Same rank — cut again.':w===0?'Your card is lower: you deal first.':'NPC’s card is lower: NPC deals first.';
+        const w=cutLowest(cards);
+        const result=w===null?'Tie for the lowest card — cut again.':w===0?'Your card is lowest: you deal first.':`${nm(w)}’s card is lowest: ${N===2?'NPC':nm(w)} deals first.`;
         sfx('play');
         $('panel').innerHTML=`<h2>Cut for the first deal</h2>
-          <div class="cutres"><div>You${cardEl(mine)}</div><div>NPC${cardEl(npcC)}</div></div>
+          <div class="cutres">${cards.map((c,sd)=>`<div>${esc(nm(sd))}${cardEl(c)}</div>`).join('')}</div>
           <p>${result}</p><button class="gold" id="cutOk">${w===null?'Cut again':'Deal'}</button>`;
         $('cutOk').onclick=()=>{$('ov').classList.remove('on');if(w===null)round();else res(w)};
       });
@@ -976,7 +1103,7 @@ function cutForDeal(){
 // Start screen: shown on launch and from the in-game menu. Continue is offered when a game is saved.
 function showHome(){
   const saved=loadSave();
-  const sub=saved?`You ${saved.scores[0]} – NPC ${saved.scores[1]} · ${cap(saved.level)}${saved.target===61?' · to 61':''}${saved.muggins?' · muggins':''}`:'';
+  const sub=saved?`${ENT_NAMES[saved.mode].map((x,e)=>`${x} ${saved.scores[e]}`).join(' – ')} · ${MODE_LABEL[saved.mode]==='NPC'?'':MODE_LABEL[saved.mode]+' · '}${cap(saved.level)}${saved.target===61?' · to 61':''}${saved.muggins?' · muggins':''}`:'';
   $('panel').innerHTML=`<div class="home"><div class="logo">♠ ♥ ♣ ♦</div><h1>Cribbage</h1><div class="tag">You against the NPC</div></div>
     ${saved?`<button class="gold" id="hCont">Continue<small>${sub}</small></button>`:''}
     <button class="${saved?'opt':'gold'}" id="hNew">New game</button>
@@ -1010,16 +1137,19 @@ function closeMenu(){$('ov2').classList.remove('on');leaveOpen=false}
 function openMenu(){
   leaveOpen=false;
   const lv=['easy','normal','hard'];
-  const pending=!!G&&(G.level!==settings.level||G.target!==settings.target);
+  const pending=!!G&&(G.level!==settings.level||G.target!==settings.target||G.mode!==settings.mode);
   const chk=(id,on,label)=>`<label class="chk"><input type="checkbox" id="${id}" ${on?'checked':''}> ${label}</label>`;
   $('panel2').innerHTML=`<h2>Menu</h2>
     <div class="sect">Game</div>
-    <div class="lbl">NPC difficulty${pending?' <small>(applies to the next game)</small>':''}</div>
+    <div class="lbl">Players${pending?' <small>(changes apply to the next game)</small>':''}</div>
+    <div class="seg">${[['2','2'],['3','3'],['4i','4 solo'],['4t','4 teams']].map(([m,t])=>`<button data-md="${m}" class="${settings.mode===m?'on':''}">${t}</button>`).join('')}</div>
+    <div class="sub" style="margin:4px 0 0;text-align:left">${{'2':'You against one NPC.','3':'You and two NPCs, everyone for themselves. Five cards each, one to the crib.','4i':'You and three NPCs, everyone for themselves. Five cards each, one to the crib.','4t':'Two teams of two: you and your NPC partner (opposite you) against two NPCs. Team scores are added.'}[settings.mode]}</div>
+    <div class="lbl">NPC difficulty</div>
     <div class="seg">${lv.map(l=>`<button data-lv="${l}" class="${settings.level===l?'on':''}">${cap(l)}</button>`).join('')}</div>
     <div class="sub" style="margin:4px 0 0;text-align:left">Against a casual player the NPC wins about 3 games in 10 on Easy, 5 in 10 on Normal and 7 in 10 on Hard.</div>
     <div class="lbl">Game length</div>
     <div class="seg"><button data-tg="121" class="${settings.target===121?'on':''}">Full game (121)</button><button data-tg="61" class="${settings.target===61?'on':''}">Short game (61)</button></div>
-    ${chk('mugChk',settings.muggins,'Muggins: you count your own hand and the NPC takes any points you miss')}
+    ${chk('mugChk',settings.muggins,'Muggins: you count your own hand and the next player takes any points you miss')}
     <div class="sect">Display</div>
     ${chk('fourChk',settings.fourColor,'Four-colour deck (clubs green, diamonds blue)')}
     ${chk('largeChk',settings.large,'Larger cards and text')}
@@ -1033,6 +1163,7 @@ function openMenu(){
     <button class="gold" id="mClose">Close</button>`;
   $('ov2').classList.add('on');
   const P=$('panel2');
+  P.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>{settings.mode=b.dataset.md;saveSettings();openMenu()});
   P.querySelectorAll('[data-lv]').forEach(b=>b.onclick=()=>{settings.level=b.dataset.lv;saveSettings();openMenu()});
   P.querySelectorAll('[data-tg]').forEach(b=>b.onclick=()=>{settings.target=+b.dataset.tg;saveSettings();openMenu()});
   const bind=(id,key,after)=>{const e=$(id);if(e)e.onchange=ev=>{settings[key]=ev.target.checked;saveSettings();applySettings();if(after)after()}};
@@ -1068,6 +1199,8 @@ function openStats(from){
     </ul>
     <div class="lbl">Won – lost by difficulty</div>
     <ul>${diff}</ul>
+    <div class="lbl">Won – lost by game type</div>
+    <ul>${['2','3','4i','4t'].map(m=>row({'2':'2 players','3':'3 players','4i':'4 players, solo','4t':'4 players, teams'}[m],`${s.byMode[m].w} – ${s.byMode[m].l}`)).join('')}</ul>
     <button class="gold" id="sBack">Back</button>
     <button class="opt" id="sReset">Reset stats</button>`;
   $('ov2').classList.add('on');

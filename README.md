@@ -1,6 +1,6 @@
 # OrangitazCribbage
 
-Play cribbage against a computer opponent (NPC). Standard two-player rules, first to 121 (or 61 for a short game). Runs in any browser and builds as an Android app.
+Play cribbage against a computer opponent (NPC). Standard rules for two, three or four players, first to 121 (or 61 for a short game). Runs in any browser and builds as an Android app.
 
 ## Play it
 
@@ -8,10 +8,11 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 
 ## Features
 
-- Deal 6, discard 2 to the crib, cut the starter (his heels scores 2 for the dealer)
+- **2, 3 or 4 players** (Menu, Players): you against one NPC; three players, everyone for themselves; four players on their own; or four players as two teams (your NPC partner sits opposite you and your scores are added). All the other players are NPCs at the difficulty you pick. Two players are dealt 6 cards and discard 2; three and four players are dealt 5 and discard 1 (the three-player crib also gets one card from the deck). Play, counting and dealing go clockwise, and in the partner game the crib belongs to the dealer's team
+- Deal, discard to the crib, cut the starter (his heels scores 2 for the dealer)
 - Pegging: 15, 31, pairs, runs, go and last card
 - The show: hand then crib, with a point-by-point breakdown (fifteens, pairs, runs, flush, nobs)
-- A cribbage board with two lanes per player (out and back), a front and a back peg each, and the skunk lines
+- A cribbage board with two lanes per player (out and back), a front and a back peg each, and the skunk lines (with three or four scorers it shows a progress bar for each instead)
 - **Hint button** (blue glow): suggests the best discard, and the best card to play while pegging
 - **Undo**: after you send two cards to the crib you have a few seconds to take them back
 - **Three difficulty levels** (Menu): Easy, Normal and Hard; a change applies from the next game

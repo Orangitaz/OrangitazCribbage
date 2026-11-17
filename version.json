@@ -1,5 +1,5 @@
 {
-  "version": "1.6.0",
-  "notes": "Play with 3 or 4 players: three players, four players on their own, or four players as two teams with an NPC partner",
+  "version": "1.7.0",
+  "notes": "Progress bars for every game, and a Settings button on the end-of-game screen so you can change the game type before playing again",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }

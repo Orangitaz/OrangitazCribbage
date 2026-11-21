@@ -18,6 +18,8 @@ Open `cribbage.html` in any browser. It is a single self-contained file with no 
 - **Three difficulty levels** (Menu): Easy, Normal and Hard; a change applies from the next game
 - **Stats** (Menu): games, win/loss, streaks, skunks, average and best hand and crib, and results per difficulty. Saved on the device and can be reset
 - **Skip animations** (Menu): shortens the NPC's pauses
+- **Who played what**: every card in the pile is underlined in its player's colour, with a line saying who played the last card
+- **Game recap**: at the end of a game, a table of where each player's points came from (pegging, hands, cribs, heels and muggins) and their best hand
 - **At the end of a game** you can play again, change the game type or any setting, see stats, or go to the main screen
 - **Start screen**: Continue (when a game is saved), New game, Settings and Stats; the in-game menu has "Main screen" to get back to it
 - **Cut for the first deal**: pick a card, the lower card deals

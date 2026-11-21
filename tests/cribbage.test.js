@@ -637,6 +637,53 @@ test('resume works in every mode: saves at many points all finish', async () => 
     }
   }
 });
+// ---------- recap and who-played-what ----------
+test('recap tally: points are filed by kind, best hand is tracked, junk is repaired', () => {
+  const t = L.blankTally(3);
+  L.addTally(t, 1, 'peg', 4); L.addTally(t, 1, 'hand', 12); L.addTally(t, 1, 'hand', 7); L.addTally(t, 2, 'crib', 9); L.addTally(t, 0, 'other', 2);
+  L.addTally(t, 2, 'nonsense', 1);   // unknown kinds count as pegging
+  assert.deepEqual(t[1], { peg: 4, hand: 19, crib: 0, other: 0, best: 12 });
+  assert.equal(t[2].peg, 1); assert.equal(t[2].crib, 9); assert.equal(t[0].other, 2);
+  assert.deepEqual(L.cleanTally(JSON.parse(JSON.stringify(t)), 3), t);
+  for (const bad of [null, 'x', [], [{}, {}], [{ peg: -1 }, {}, {}], [{ peg: 'a' }, {}, {}], [null, {}, {}]]) {
+    assert.deepEqual(L.cleanTally(bad, 3), L.blankTally(3));
+  }
+  assert.equal(L.cleanTally([{ peg: 2 }, { hand: 3 }], 2)[1].hand, 3);   // missing fields default to zero
+});
+test('saves keep the recap and who played each pile card; old saves still load', () => {
+  const d = L.newDeck();
+  const base = { v: 1, mode: '3', scores: [0, 0, 0], prev: [0, 0, 0], dealer: 0, level: 'normal', target: 121, muggins: false,
+    hands: [d.slice(0, 2), d.slice(2, 4), d.slice(4, 6)], orig: [d.slice(0, 5), d.slice(5, 10), d.slice(10, 15)], crib: d.slice(20, 24),
+    starter: d[30], deck: d.slice(31), peg: [d.slice(0, 2), d.slice(2, 4), d.slice(4, 6)], pile: [d[40], d[41]], playedAll: [d[40], d[41]],
+    count: 12, stage: 'peg', showIdx: 0, pcur: 2, plast: 1, pegInit: true, log: [] };
+  const withNew = L.unpackGame({ ...base, pileBy: [1, 2], tally: [{ peg: 3 }, { peg: 0 }, { hand: 5, best: 5 }] });
+  assert.deepEqual(withNew.pileBy, [1, 2]);
+  assert.equal(withNew.tally[2].best, 5);
+  const old = L.unpackGame(base);   // saved by an older version
+  assert.deepEqual(old.pileBy, [-1, -1]);
+  assert.deepEqual(old.tally, L.blankTally(3));
+  assert.deepEqual(L.unpackGame({ ...base, pileBy: [1] }).pileBy, [-1, -1]);       // wrong length
+  assert.deepEqual(L.unpackGame({ ...base, pileBy: [1, 9] }).pileBy, [-1, -1]);    // not a seat
+});
+for (const mode of ['2', '3', '4i', '4t']) {
+  test(`${mode}: the recap adds up to each side's score and the pile always knows who played every card`, async () => {
+    const g = loadGame();
+    botGame(g, 'normal', 'normal');
+    g.run(`settings.mode='${mode}';var results=[],bad=0;
+      gameOver=w=>{const E=MODES[G.mode];const sums=Array(E.ents).fill(0);G.tally.forEach((t,sd)=>{sums[entOf(G.mode,sd)]+=${JSON.stringify(['peg', 'hand', 'crib', 'other'])}.reduce((n,k)=>n+t[k],0)});
+        results.push({w,scores:[...G.scores],sums,best:G.tally.map(t=>t.best)})};
+      const oa=addScore;addScore=(p,pts,why,kind)=>{if(G.pileBy.length!==G.pile.length)bad++;return oa(p,pts,why,kind)};`);
+    for (let i = 0; i < 6; i++) await g.run('newGame()');
+    const res = g.run('results');
+    assert.equal(res.length, 6);
+    assert.equal(g.run('bad'), 0, 'pileBy always matches the pile');
+    for (const r of res) r.scores.forEach((sc, e) => {
+      if (e === r.w) assert.ok(r.sums[e] >= sc, 'the winner may have scored past the target');
+      else assert.equal(r.sums[e], sc, `side ${e}`);
+    });
+    assert.ok(res.every(r => r.best.every(b => b >= 0 && b <= 29)));
+  });
+}
 test('finished games clear the saved game', async () => {
   const g = loadGame();
   botGame(g, 'normal', 'normal', false);

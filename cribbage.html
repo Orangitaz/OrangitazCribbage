@@ -130,19 +130,30 @@ body .card.mini:first-child{margin-left:0}
 #prog{padding:2px 2px 0}
 .prow{display:flex;align-items:center;gap:7px;margin:5px 0;font-size:14px;font-weight:700}
 .prow .dot{width:13px;height:13px;border-radius:50%;border:2px solid #fff8;flex:none}
-.prow .pn{width:74px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.prow .pn{width:88px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prow b{width:34px;text-align:right;font-size:20px;font-variant-numeric:tabular-nums;flex:none}
 .ptrack{position:relative;flex:1;height:16px;background:#2a1608;border-radius:7px;overflow:hidden}
 .ptrack i{position:absolute;left:0;top:0;bottom:0;border-radius:7px;transition:width .5s ease}
 .ptrack i.pback{background:#fff6!important;transition:none}
 .ptrack u{position:absolute;top:0;bottom:0;width:2px;opacity:.9}
 .pticks{display:flex;align-items:center;gap:7px;height:12px;margin-top:-2px}
-.pticks .pn{width:74px;flex:none}.pticks b{width:34px;flex:none}
+.pticks .pn{width:88px;flex:none}.pticks b{width:34px;flex:none}
 .pscale{position:relative;flex:1;height:12px}
 .pscale span{position:absolute;transform:translateX(-50%);font-size:10px;font-weight:700}
 .psub{font-size:11px;opacity:.75;text-align:center;margin-top:3px}
 #pop .pop.p2{border-color:#ffd54f;color:#ffe9a0}
 #pop .pop.p3{border-color:#b388ff;color:#d8c4ff}
+#lastplay{font-size:12px;opacity:.9;min-height:15px}
+#pile .pc{margin-left:-18px}#pile .pc:first-child{margin-left:0}
+#pile .pc .card{margin-left:0;box-shadow:0 1px 3px #0008,0 4px 0 -1px var(--who)}
+body.large #pile .pc{margin-left:-28px}body.large #pile .pc:first-child{margin-left:0}
+body #pile .pc .card,body.large #pile .pc .card{margin-left:0}
+.recap{width:100%;border-collapse:collapse;font-size:12px;margin:6px 0 4px}
+.recap th{font-weight:700;color:var(--gold);padding:2px 3px;text-align:right}
+.recap th:first-child,.recap td:first-child{text-align:left}
+.recap td{padding:2px 3px;text-align:right;border-top:1px solid #fff2;font-variant-numeric:tabular-nums}
+.recap tr.tot td{font-weight:800;border-top:2px solid #fff4}
+.recap td.hi{color:var(--gold);font-weight:700}
 </style>
 </head>
 <body>
@@ -154,7 +165,7 @@ body .card.mini:first-child{margin-left:0}
     <div class="row" id="npc"></div>
     <div id="mid">
       <div class="slot" id="starter"></div>
-      <div id="pilewrap"><div id="pile"></div><div id="count"></div></div>
+      <div id="pilewrap"><div id="pile"></div><div id="count"></div><div id="lastplay"></div></div>
       <div class="slot" id="cribinfo"></div>
     </div>
   </div>
@@ -517,7 +528,29 @@ function recordGame(st,g){
 const progressPct=(score,target)=>Math.max(0,Math.min(100,100*score/target));
 const skunkLines=target=>target===61?[31]:[61,91];
 // ---- saved game ----
-const SAVE_KEYS=['mode','scores','prev','dealer','level','target','muggins','hands','orig','crib','starter','deck','peg','pile',
+// Where each player's points came from this game (shown in the recap): pegging, hands, cribs, other (heels, muggins).
+const TALLY_KINDS=['peg','hand','crib','other'];
+const blankTally=n=>Array.from({length:n},()=>({peg:0,hand:0,crib:0,other:0,best:0}));
+function addTally(t,seat,kind,pts){
+  const k=TALLY_KINDS.includes(kind)?kind:'peg';
+  t[seat][k]+=pts;
+  if(k==='hand')t[seat].best=Math.max(t[seat].best,pts);
+}
+// A saved tally is only kept if it is well formed; otherwise the recap just starts again from zero.
+function cleanTally(t,n){
+  if(!Array.isArray(t)||t.length!==n)return blankTally(n);
+  const out=blankTally(n);
+  for(let i=0;i<n;i++){
+    const r=t[i];if(!r||typeof r!=='object')return blankTally(n);
+    for(const k of[...TALLY_KINDS,'best']){
+      if(r[k]===undefined)continue;
+      if(!Number.isFinite(r[k])||r[k]<0)return blankTally(n);
+      out[i][k]=r[k];
+    }
+  }
+  return out;
+}
+const SAVE_KEYS=['tally','pileBy','mode','scores','prev','dealer','level','target','muggins','hands','orig','crib','starter','deck','peg','pile',
   'playedAll','count','stage','showIdx','pcur','plast','pegInit','log'];
 const isCard=c=>!!c&&Number.isInteger(c.r)&&c.r>=1&&c.r<=13&&Number.isInteger(c.s)&&c.s>=0&&c.s<=3;
 const isCards=a=>Array.isArray(a)&&a.length<=52&&a.every(isCard);
@@ -550,6 +583,9 @@ function unpackGame(o){
     if(Math.max(...o.scores)>=o.target)return null;
     const c=JSON.parse(JSON.stringify(o));
     c.mode=mode;c.muggins=!!o.muggins;c.pegInit=!!o.pegInit;
+    c.tally=cleanTally(o.tally,n);
+    // who played each card of the pile (older saves do not know: -1 shows no name)
+    c.pileBy=Array.isArray(o.pileBy)&&o.pileBy.length===o.pile.length&&o.pileBy.every(x=>Number.isInteger(x)&&x>=0&&x<n)?o.pileBy:o.pile.map(()=>-1);
     c.log=Array.isArray(o.log)?o.log.filter(x=>typeof x==='string').slice(-2):[];
     return c;
   }catch(e){return null}
@@ -719,8 +755,13 @@ function render(){
   $('npc').innerHTML=opp;
   $('starter').innerHTML=G.starter?`<div style="margin-bottom:2px">Starter</div>${cardEl(G.starter)}`:'';
   $('cribinfo').innerHTML=`Crib<br><b>${G.crib.length}</b> cards<br>${G.dealer===0?'yours':isPartner(G.dealer)?'your partner’s':(big?"NPC's":nm(G.dealer)+"’s")}${N>2&&G.dealer===0?'<br><small>you deal</small>':''}`;
-  $('pile').innerHTML=G.pile.map(c=>cardEl(c)).join('');
+  $('pile').innerHTML=G.pile.map((c,i)=>{
+    const by=G.pileBy[i];
+    return by>=0?`<div class="pc" style="--who:${PCOL[ent(by)]}" title="${esc(nm(by))}">${cardEl(c)}</div>`:cardEl(c);
+  }).join('');
   $('count').textContent=G.phase==='peg'?`Count: ${G.count}`:'';
+  const lp=G.pile.length?G.pileBy[G.pile.length-1]:-1;
+  $('lastplay').textContent=G.phase==='peg'&&lp>=0?`${lp===0?'You':nm(lp)} played ${fmt(G.pile[G.pile.length-1])}`:'';
   const hint=i=>G.hint&&G.hint.has(i)?'hint':'';
   if(G.phase==='discard'||G.phase==='confirm'){
     $('mine').innerHTML=G.hands[0].map((c,i)=>cardEl(c,`${G.sel.has(i)?'sel ':''}${hint(i)}`,i)).join('');
@@ -745,8 +786,9 @@ $('btn').addEventListener('click',()=>{if(G&&G.onBtn)G.onBtn()});
 $('btn2').addEventListener('click',()=>{if(G)showHint()});
 
 // seat = who scored; the points go to that seat's side (a team in the partner game)
-function addScore(seat,pts,why){
+function addScore(seat,pts,why,kind='peg'){
   if(!pts)return;
+  addTally(G.tally,seat,kind,pts);
   const e=ent(seat);
   G.prev[e]=G.scores[e];G.scores[e]=Math.min(G.target,G.scores[e]+pts);
   log(`${nm(seat)} +${pts} — ${why}`);
@@ -847,7 +889,7 @@ async function pegging(A){
   const N=NS();
   if(!G.pegInit){
     G.peg=G.hands.map(h=>h.slice());
-    G.pile=[];G.count=0;G.playedAll=[];G.pcur=nextSeat(G.dealer);G.plast=null;G.pegInit=true;
+    G.pile=[];G.pileBy=[];G.count=0;G.playedAll=[];G.pcur=nextSeat(G.dealer);G.plast=null;G.pegInit=true;
   }
   G.phase='peg';
   const left=()=>G.peg.reduce((n,h)=>n+h.length,0);
@@ -865,7 +907,7 @@ async function pegging(A){
         c=choosePlay({playable:pl,pile:G.pile,count:G.count,level:npcLvl(),unseen:unseenFor(cur),oppLeft:oppLeftFor(cur),myHand:G.peg[cur]});
       }else{status(`Your play — count is ${G.count}`);render();c=await A(humanPlay())}
       G.peg[cur]=G.peg[cur].filter(x=>x!==c);
-      G.pile.push(c);G.playedAll.push(c);G.count+=val(c);
+      G.pile.push(c);G.pileBy.push(cur);G.playedAll.push(c);G.count+=val(c);
       sfx('play');
       render();
       const r=pegPoints(G.pile,G.count);
@@ -874,7 +916,7 @@ async function pegging(A){
       if(G.count===31){
         // keep the pile on the table after the very last card so it can be seen before counting
         G.plast=null;   // 31 is already scored, so there is no "go" point to give if the game is resumed here
-        if(left()>0){await A(pause(800));G.pile=[];G.count=0}
+        if(left()>0){await A(pause(800));G.pile=[];G.pileBy=[];G.count=0}
       }else if(left()===0){addScore(cur,1,'last card')}
     }else if(othersCanPlay(cur)){
       log(`${nm(cur)}: Go`);status(cur===0?'You say "Go"':`${nm(cur)} says "Go"`);render();sfx('go');await A(pause(900));G.pcur=nextSeat(cur);
@@ -882,7 +924,7 @@ async function pegging(A){
       await A(pause(700));
       if(G.plast!==null)addScore(G.plast,1,'go');
       G.pcur=nextSeat(G.plast!==null?G.plast:cur);
-      G.pile=[];G.count=0;G.plast=null;render();
+      G.pile=[];G.pileBy=[];G.count=0;G.plast=null;render();
     }
     saveGame();
   }
@@ -905,7 +947,7 @@ async function round(A,resume){
     G.orig=G.hands.map(h=>h.slice());
     G.crib=[];for(let i=0;i<cribStart(N);i++)G.crib.push(d.pop());
     G.deck=d;
-    G.starter=null;G.pile=[];G.count=0;G.peg=blankSeats(N);G.playedAll=[];G.turn=null;
+    G.starter=null;G.pile=[];G.pileBy=[];G.count=0;G.peg=blankSeats(N);G.playedAll=[];G.turn=null;
     G.pegInit=false;G.pcur=0;G.plast=null;G.showIdx=0;G.stage='discard';
   }
   G.sel=new Set();G.hint=null;
@@ -930,7 +972,7 @@ async function round(A,resume){
     G.noSave=true;   // between discarding and the cut the state is half-way; no checkpoint until the starter is out
     G.phase='cut';status('Cutting the deck…');render();await A(pause(900));
     G.starter=G.deck.pop();render();
-    if(G.starter.r===11){addScore(dealer,2,'his heels (jack starter)')}
+    if(G.starter.r===11){addScore(dealer,2,'his heels (jack starter)','other')}
     G.stage='peg';G.pegInit=false;G.noSave=false;saveGame();
     await A(pause(700));
   }
@@ -939,7 +981,7 @@ async function round(A,resume){
     G.stage='show';G.showIdx=0;saveGame();
   }
   if(G.stage==='show'){
-    G.phase='show';G.pile=[];G.count=0;render();
+    G.phase='show';G.pile=[];G.pileBy=[];G.count=0;render();
     // hands are counted clockwise from the player after the dealer, the dealer last, then the crib
     const order=[];
     for(let k=1;k<=N;k++){const sd=(dealer+k)%N;order.push([sd,G.hands[sd],'hand'])}
@@ -953,11 +995,11 @@ async function round(A,resume){
       let claim=null;
       if(G.muggins&&sd===0)claim=await A(askCount(title,h,G.starter));
       await A(showPanel(title,h,G.starter,r,claim));
-      if(claim===null)addScore(sd,r.total,title);
+      if(claim===null)addScore(sd,r.total,title,kind);
       else{
         const o=resolveClaim(claim,r.total);
-        addScore(0,o.me,title);
-        if(o.npc)addScore(nextSeat(0),o.npc,'muggins');
+        addScore(0,o.me,title,kind);
+        if(o.npc)addScore(nextSeat(0),o.npc,'muggins','other');
       }
       G.showIdx=i+1;saveGame();
     }
@@ -965,6 +1007,20 @@ async function round(A,resume){
   }
 }
 
+// A table of where each player's points came from this game; the biggest in each row is highlighted.
+function recapTable(){
+  const N=NS(),seats=Array.from({length:N},(_,i)=>i);
+  const rows=[['Pegging','peg'],['Hands','hand'],['Cribs','crib'],['Heels, muggins','other']];
+  const tot=sd=>TALLY_KINDS.reduce((n,k)=>n+G.tally[sd][k],0);
+  const cell=(v,vals)=>`<td${v>0&&v===Math.max(...vals)?' class="hi"':''}>${v}</td>`;
+  let h=`<table class="recap"><tr><th></th>${seats.map(sd=>`<th>${esc(nm(sd))}</th>`).join('')}</tr>`;
+  for(const[label,k]of rows){const vals=seats.map(sd=>G.tally[sd][k]);h+=`<tr><td>${label}</td>${vals.map(v=>cell(v,vals)).join('')}</tr>`}
+  const bests=seats.map(sd=>G.tally[sd].best);
+  h+=`<tr><td>Best hand</td>${bests.map(v=>cell(v,bests)).join('')}</tr>`;
+  const tots=seats.map(tot);
+  h+=`<tr class="tot"><td>Points</td>${tots.map(v=>cell(v,tots)).join('')}</tr></table>`;
+  return h;
+}
 function gameOver(w){
   // skunk: when you win, every other side is below the line; when you lose, your side is
   const E=MODES[G.mode].ents;
@@ -978,6 +1034,7 @@ function gameOver(w){
   const head=w===0?(team?'Your team wins! 🎉':'You win! 🎉'):(team?`${wn} win`:`${wn} wins`);
   $('panel').innerHTML=`<h2>${head}${skunk}</h2>
     <p>Final score: ${G.scores.map((x,e)=>`${esc(entNm(e))} ${x}`).join(' – ')}</p>
+    ${recapTable()}
     <p style="opacity:.8">Record: ${stats.w} wins, ${stats.l} losses</p>
     <button class="gold" id="again">Play again</button>
     <button class="opt" id="goSet">Change game type or settings</button>
@@ -997,7 +1054,7 @@ async function newGame(saved){
   // Every await goes through A so a game that was abandoned stops quietly.
   const A=async p=>{const v=await p;if(gen!==GEN)throw{abort:true};return v};
   const md=saved&&saved.mode?saved.mode:settings.mode,nn=MODES[md].n,ee=MODES[md].ents;
-  const fresh={mode:md,scores:Array(ee).fill(0),prev:Array(ee).fill(0),dealer:0,log:[],hands:blankSeats(nn),orig:blankSeats(nn),crib:[],peg:blankSeats(nn),pile:[],
+  const fresh={mode:md,scores:Array(ee).fill(0),prev:Array(ee).fill(0),dealer:0,log:[],hands:blankSeats(nn),orig:blankSeats(nn),crib:[],peg:blankSeats(nn),pile:[],pileBy:[],tally:blankTally(nn),
     playedAll:[],deck:[],count:0,starter:null,stage:'discard',showIdx:0,pcur:0,plast:null,pegInit:false,
     level:settings.level,target:settings.target,muggins:settings.muggins};
   G={...fresh,...(saved||{}),sel:new Set(),hint:null,phase:'start',turn:null};

@@ -1,5 +1,5 @@
 {
-  "version": "1.7.0",
-  "notes": "Progress bars for every game, and a Settings button on the end-of-game screen so you can change the game type before playing again",
+  "version": "1.8.0",
+  "notes": "Shows who played each card in the pile, and an end-of-game recap of where each player's points came from",
   "url": "https://github.com/Orangitaz/OrangitazCribbage/releases/latest"
 }
